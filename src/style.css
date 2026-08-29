@@ -1,0 +1,710 @@
+:root {
+  /* Palette "au carré" : turquoise clair réservé aux remplissages (texte
+     sombre dessus, comme sur le logo), turquoise soutenu pour tout ce qui
+     est trait/texte/bordure directement sur fond clair. */
+  --bg: #F3F6F6;
+  --surface: #FFFFFF;
+  --surface-alt: #F7FAFA;
+  --border: #DEE6E4;
+  --border-strong: #C3D0CD;
+  --text: #0B0F0E;
+  --text-muted: #4F6864;
+  --text-faint: #93A6A2;
+  --accent: #44F8CC;
+  --accent-strong: #0FAE93;
+  --accent-soft: #DEFBF4;
+  --accent-contrast: #062019;
+  --tooltip-accent: #44F8CC;
+  --tooltip-focus-accent: #FF9470;
+  --formula: #D9603A;
+  --formula-soft: #FDEAE3;
+  /* Couleur dédiée au "mode focus" (sélection d'une table) : volontairement
+     distincte de --accent/--accent-strong, qui restent la couleur des
+     liaisons et des références. */
+  --focus-accent: #F77245;
+  --focus-accent-soft: #FDE6DD;
+  --header-tint: var(--focus-accent-soft);
+  --shadow: rgba(9, 12, 11, 0.10);
+  --shadow-strong: rgba(9, 12, 11, 0.20);
+  --line-muted: rgba(15, 174, 147, 0.6);
+  --canvas-dot: rgba(89, 115, 110, 0.18);
+  --sidebar-w: 172px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B0F0E;
+    --surface: #121917;
+    --surface-alt: #0F1513;
+    --border: #223330;
+    --border-strong: #34443F;
+    --text: #EAF3F1;
+    --text-muted: #93AFA9;
+    --text-faint: #5E716C;
+    --accent: #44F8CC;
+    --accent-strong: #6FFFDC;
+    --accent-soft: rgba(68, 248, 204, 0.16);
+    --accent-contrast: #052018;
+    --tooltip-accent: #0FAE93;
+    --tooltip-focus-accent: #F77245;
+    --formula: #FF9470;
+    --formula-soft: rgba(247, 114, 69, 0.16);
+    --focus-accent: #FF9470;
+    --focus-accent-soft: rgba(247, 114, 69, 0.18);
+    --header-tint: var(--focus-accent-soft);
+    --shadow: rgba(0, 0, 0, 0.35);
+    --shadow-strong: rgba(0, 0, 0, 0.55);
+    --line-muted: rgba(68, 248, 204, 0.55);
+    --canvas-dot: rgba(150, 180, 174, 0.14);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0B0F0E;
+  --surface: #121917;
+  --surface-alt: #0F1513;
+  --border: #223330;
+  --border-strong: #34443F;
+  --text: #EAF3F1;
+  --text-muted: #93AFA9;
+  --text-faint: #5E716C;
+  --accent: #44F8CC;
+  --accent-strong: #6FFFDC;
+  --accent-soft: rgba(68, 248, 204, 0.16);
+  --accent-contrast: #052018;
+  --tooltip-accent: #0FAE93;
+  --tooltip-focus-accent: #F77245;
+  --formula: #FF9470;
+  --formula-soft: rgba(247, 114, 69, 0.16);
+  --focus-accent: #FF9470;
+  --focus-accent-soft: rgba(247, 114, 69, 0.18);
+  --header-tint: var(--focus-accent-soft);
+  --shadow: rgba(0, 0, 0, 0.35);
+  --shadow-strong: rgba(0, 0, 0, 0.55);
+  --line-muted: rgba(68, 248, 204, 0.55);
+  --canvas-dot: rgba(150, 180, 174, 0.14);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.mono {
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ---------- Top bar ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 12px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex: none;
+  z-index: 20;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.brand-logo img {
+  display: block;
+  height: 34px;
+  width: auto;
+}
+/* Le logo a un texte noir sur fond transparent : sur fond sombre on le
+   passe en blanc (on perd les couleurs du losange, mais il reste lisible). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brand-logo img { filter: brightness(0) invert(1); }
+}
+:root[data-theme="dark"] .brand-logo img { filter: brightness(0) invert(1); }
+
+.brand h1 {
+  position: relative;
+  display: inline-block;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+/* Signature "au carré" : un trait arrondi légèrement penché derrière le
+   début du titre — même technique que sur le widget Journal des évolutions. */
+.brand h1 .title-highlight {
+  position: absolute;
+  left: -4px;
+  bottom: 1px;
+  width: 82px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--focus-accent);
+  transform: rotate(-1.8deg);
+  transform-origin: left center;
+}
+.brand h1 .title-text {
+  position: relative;
+}
+
+.stat-chips {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+.stat-chip {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+.stat-chip b { color: var(--text); font-weight: 600; }
+
+.search-wrap {
+  position: relative;
+  flex: 1;
+  max-width: 320px;
+}
+.search-wrap svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.search-wrap input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 8px 10px 8px 30px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text);
+  outline: none;
+}
+.search-wrap input:focus {
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.search-wrap input::placeholder { color: var(--text-faint); }
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex: none;
+}
+
+.mode-toggle {
+  display: flex;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+.mode-toggle button {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 11px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.mode-toggle button.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+/* "Mode focus" a sa propre couleur (orange) pour rester cohérent avec la
+   bordure de sélection des tables ; "Toutes les liaisons" garde le turquoise
+   des liaisons. */
+#mode-focus.active {
+  background: var(--focus-accent);
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
+.icon-btn svg { width: 13px; height: 13px; }
+
+/* ---------- Body layout ---------- */
+.body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.sidebar {
+  width: var(--sidebar-w);
+  flex: none;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 10px 6px 16px;
+}
+.sidebar-group + .sidebar-group { margin-top: 12px; }
+.sidebar-group-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--focus-accent);
+  padding: 0 5px 4px;
+}
+.sidebar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 5px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.sidebar-row:hover { background: var(--surface-alt); }
+.sidebar-row.is-focused {
+  background: var(--focus-accent-soft);
+  border-color: var(--focus-accent);
+}
+.sidebar-row .name {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-row .count {
+  font-size: 9px;
+  color: var(--text-faint);
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.sidebar-row.is-dim .name { color: var(--text-faint); }
+
+/* ---------- Canvas ---------- */
+/* Enveloppe non-scrollable : sert d'ancrage à la légende et au bandeau de
+   focus (position: absolute) pour qu'ils restent fixes à l'écran quel que
+   soit le défilement de .canvas-wrap à l'intérieur. */
+.canvas-pane {
+  flex: 1;
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+.canvas-wrap {
+  flex: 1;
+  overflow: auto;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.canvas-content {
+  position: relative;
+  width: 1480px;
+  height: 900px;
+  transform-origin: 0 0;
+}
+.canvas-content svg.wires {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* Un <svg> racine rogne son contenu à sa propre boîte par défaut
+     (overflow: hidden implicite). .canvas-content a une taille nominale
+     fixe pour le fond pointillé, mais les tables réelles la dépassent
+     largement (mise en page auto en colonnes) : sans ce overflow:visible,
+     toute liaison dépassant 1480×900 est silencieusement rognée. */
+  overflow: visible;
+}
+
+.wire {
+  fill: none;
+  stroke: var(--line-muted);
+  stroke-width: 1.8;
+  transition: stroke 120ms ease, stroke-width 120ms ease, opacity 120ms ease;
+}
+.wire.is-active { stroke: var(--accent-strong); stroke-width: 2.2; opacity: 1 !important; }
+.wire.is-hovered { stroke: var(--accent-strong); stroke-width: 2.6; opacity: 1 !important; }
+.wire.is-hidden { opacity: 0; }
+
+/* ---------- Table card ---------- */
+.table-card {
+  position: absolute;
+  width: 232px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px var(--shadow);
+  transition: opacity 150ms ease, box-shadow 150ms ease, border-color 150ms ease, filter 150ms ease;
+  user-select: none;
+  z-index: 2;
+}
+.table-card.is-dimmed { opacity: 0.32; filter: saturate(0.6); }
+.table-card.is-active {
+  border-color: var(--focus-accent);
+  box-shadow: 0 6px 20px var(--shadow-strong), 0 0 0 3px var(--focus-accent-soft);
+  z-index: 6;
+}
+.table-card.is-dragging { box-shadow: 0 10px 28px var(--shadow-strong); z-index: 10; cursor: grabbing; }
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 10px;
+  background: var(--header-tint);
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  border-radius: 10px 10px 0 0;
+}
+.card-header .dot {
+  /* Losange plutôt que rond : clin d'œil discret à la forme du logo. */
+  width: 6px; height: 6px;
+  background: var(--group-color, var(--text-faint));
+  transform: rotate(45deg);
+  flex: none;
+}
+.card-header .tname {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.card-header .fcount {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 27px;
+  padding: 0 10px;
+  border-top: 1px solid var(--border);
+  cursor: default;
+}
+.field-row:first-of-type { border-top: none; }
+.field-row.is-match { background: var(--accent-soft); }
+.field-row .ficon {
+  width: 15px; height: 15px; flex: none; color: var(--text-faint);
+  display: flex; align-items: center; justify-content: center;
+}
+.field-row.is-ref .ficon { color: var(--accent-strong); }
+.field-row .fname {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.field-row .ftag {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--formula);
+  background: var(--formula-soft);
+  border-radius: 4px;
+  padding: 1px 4px;
+  flex: none;
+  letter-spacing: 0.02em;
+}
+.field-row .fref-target {
+  font-size: 10px;
+  color: var(--accent-strong);
+  font-weight: 600;
+  flex: none;
+  max-width: 74px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.field-row.is-ref:hover { background: var(--accent-soft); }
+
+/* ---------- Legend ---------- */
+.legend {
+  /* Ancrée sur .canvas-pane (non scrollable), pas .canvas-wrap : sinon
+     l'élément défile avec le contenu du canvas et finit par flotter au
+     milieu des cartes dès que le document a besoin de scroller (cas des
+     gros documents Grist réels). */
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px var(--shadow);
+  width: 226px;
+  z-index: 15;
+  overflow: hidden;
+}
+.legend-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.legend-head svg { width: 12px; height: 12px; transition: transform 150ms ease; color: var(--text-faint); }
+.legend.is-collapsed .legend-head svg { transform: rotate(-90deg); }
+.legend-body {
+  padding: 2px 12px 11px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+}
+.legend.is-collapsed .legend-body { display: none; }
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.legend-item .ficon { width: 14px; height: 14px; color: var(--text-faint); flex: none; }
+.legend-item.ref .ficon { color: var(--accent-strong); }
+
+/* ---------- Zoom ---------- */
+.zoom-controls {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px var(--shadow);
+  z-index: 15;
+  overflow: hidden;
+}
+.zoom-controls button {
+  font-family: inherit;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.zoom-controls button:hover { color: var(--text); background: var(--surface-alt); }
+.zoom-btn { width: 30px; font-size: 15px; font-weight: 700; }
+.zoom-level {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  width: 46px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+.zoom-fit { padding: 0 12px; font-size: 12px; font-weight: 600; border-left: 1px solid var(--border); }
+
+/* ---------- Focus banner ---------- */
+.focus-banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 8px 7px 12px;
+  border-radius: 20px;
+  box-shadow: 0 6px 18px var(--shadow-strong);
+  z-index: 16;
+}
+.focus-banner.is-visible { display: flex; }
+.focus-banner .mono { color: var(--bg); opacity: 0.85; }
+.focus-banner button {
+  background: rgba(255,255,255,0.16);
+  border: none;
+  color: inherit;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.focus-banner button svg { width: 10px; height: 10px; }
+
+/* ---------- Tooltip ---------- */
+.tooltip {
+  position: fixed;
+  z-index: 100;
+  background: var(--text);
+  color: var(--bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 11.5px;
+  max-width: 240px;
+  box-shadow: 0 10px 26px var(--shadow-strong);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(3px);
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+.tooltip.is-visible { opacity: 1; transform: translateY(0); }
+.tooltip .t-table {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  color: var(--tooltip-focus-accent);
+  margin-bottom: 2px;
+}
+.tooltip .t-name {
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  font-size: 12.5px;
+  margin-bottom: 3px;
+}
+.tooltip .t-type {
+  /* Le fond du tooltip est toujours la couleur "encre" du thème courant
+     (voir plus haut), donc sa teinte d'accent doit être fixée indépendamment
+     du thème plutôt que de réutiliser --accent-strong (calibré pour l'autre
+     polarité de fond). */
+  color: var(--tooltip-accent);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.tooltip .t-formula {
+  font-family: "JetBrains Mono", monospace;
+  background: rgba(255,255,255,0.1);
+  border-radius: 5px;
+  padding: 5px 7px;
+  color: var(--bg);
+  opacity: 0.92;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-top: 4px;
+}
+.tooltip .t-label {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.6;
+  margin-bottom: 2px;
+}
+
+/* ---------- Chargement / erreur ---------- */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.loading-overlay.is-visible { display: flex; }
+.loading-overlay .spinner {
+  /* Losange plutôt que rond : clin d'œil discret à la forme du logo. */
+  width: 20px;
+  height: 20px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent-strong);
+  animation: spin-diamond 800ms linear infinite;
+}
+@keyframes spin-diamond {
+  from { transform: rotate(45deg); }
+  to { transform: rotate(405deg); }
+}
+
+.load-error {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  background: var(--bg);
+  color: var(--text);
+}
+.load-error.is-visible { display: flex; }
+.load-error strong { font-size: 14px; }
+.load-error span { font-size: 12.5px; color: var(--text-muted); max-width: 420px; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}
