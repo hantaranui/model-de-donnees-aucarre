@@ -6,11 +6,18 @@
       group: "Comptes",
       x: 320,
       y: 580,
+      description: "Un compte apprenant. Cr\xE9\xE9 automatiquement \xE0 la premi\xE8re connexion via le SSO du client.",
       fields: [
         { name: "Nom", type: "text" },
         { name: "Email", type: "text" },
         { name: "DateInscription", type: "date" },
-        { name: "Abonnement", type: "ref", ref: "Abonnement", displayColumn: "Statut" },
+        {
+          name: "Abonnement",
+          type: "ref",
+          ref: "Abonnement",
+          displayColumn: "Statut",
+          description: "L'abonnement individuel de l'utilisateur, distinct de celui de son grand compte le cas \xE9ch\xE9ant."
+        },
         { name: "GrandCompte", type: "ref", ref: "Auxiliaires_GrandCompte" },
         { name: "FormationsSuivies", type: "reflist", ref: "Formations" }
       ]
@@ -38,7 +45,11 @@
         { name: "NomCompte", type: "text" },
         { name: "NbAuxiliaires", type: "int" },
         { name: "DateDebut", type: "date" },
-        { name: "DateExpiration", type: "date", formula: "rec.DateDebut + 365" }
+        { name: "DateExpiration", type: "date", formula: "rec.DateDebut + 365" },
+        // Référence cassée : la table visée n'existe plus (colonne oubliée
+        // après une suppression). Exemple de démo pour la détection dédiée
+        // (brokenRef est calculé automatiquement par markBrokenReferences).
+        { name: "AncienneOffre", type: "ref", ref: "Offres_Archivees" }
       ]
     },
     {
@@ -53,7 +64,12 @@
         { name: "PrixParticulier", type: "numeric" },
         { name: "Description", type: "longtext" },
         { name: "AttestationDoc", type: "attachment" },
-        { name: "Chapitres", type: "reflist", ref: "Chapitre_stats" }
+        {
+          name: "Chapitres",
+          type: "reflist",
+          ref: "Chapitre_stats",
+          reverseField: { table: "Chapitre_stats", name: "Formation" }
+        }
       ]
     },
     {
@@ -63,7 +79,12 @@
       y: 580,
       fields: [
         { name: "Titre", type: "text" },
-        { name: "Formation", type: "ref", ref: "Formations" },
+        {
+          name: "Formation",
+          type: "ref",
+          ref: "Formations",
+          reverseField: { table: "Formations", name: "Chapitres" }
+        },
         { name: "Likes", type: "int" },
         { name: "Dislikes", type: "int" },
         { name: "Ordre", type: "int" },
@@ -108,6 +129,18 @@
         { name: "Quiz", type: "choice" },
         { name: "BonneRep", type: "text" }
       ]
+    },
+    {
+      id: "Parametres",
+      group: "Syst\xE8me",
+      x: 1430,
+      y: 1120,
+      description: "R\xE9glages globaux de la plateforme (une seule ligne en pratique). Table volontairement isol\xE9e.",
+      fields: [
+        { name: "NomPlateforme", type: "text" },
+        { name: "ContactSupport", type: "text" },
+        { name: "MaintenanceActive", type: "bool" }
+      ]
     }
   ];
   function tableById(tables, id) {
@@ -128,7 +161,7 @@
     // Grist ne distingue pas texte et texte long
     numeric: "Num\xE9rique",
     int: "Entier",
-    bool: "Case \xE0 cocher",
+    bool: "Bool\xE9en",
     date: "Date",
     datetime: "Date et heure",
     choice: "Choix unique",
@@ -140,7 +173,8 @@
   var GROUP_COLORS = {
     Comptes: "#F77245",
     Contenu: "#0FAE93",
-    Modules: "#59736E"
+    Modules: "#59736E",
+    Syst\u00E8me: "#8676D9"
   };
   var CARD_W = 232;
   var HEADER_H = 38;
@@ -179,29 +213,59 @@
     if (bottom <= top) return 0;
     return top + index / (groupSize - 1) * (bottom - top);
   }
+  function mergeReverseFieldPairs(rawConnections) {
+    const byKey = new Map(rawConnections.map((c) => [c.key, c]));
+    const consumed = /* @__PURE__ */ new Set();
+    const merged = [];
+    rawConnections.forEach((c) => {
+      if (consumed.has(c.key)) return;
+      const mirrorKey = c.reverseField && `${c.reverseField.table}.${c.reverseField.name}`;
+      const mirror = mirrorKey ? byKey.get(mirrorKey) : null;
+      const isMutual = mirror && mirror.reverseField && mirror.reverseField.table === c.from && mirror.reverseField.name === c.fieldName;
+      if (isMutual) {
+        consumed.add(c.key);
+        consumed.add(mirror.key);
+        merged.push({
+          key: c.key,
+          from: c.from,
+          fieldIndex: c.fieldIndex,
+          to: c.to,
+          toFieldIndex: mirror.fieldIndex,
+          kind: c.kind,
+          bidirectional: true
+        });
+      } else {
+        merged.push({ key: c.key, from: c.from, fieldIndex: c.fieldIndex, to: c.to, kind: c.kind });
+      }
+    });
+    return merged;
+  }
   function buildConnections(tables) {
     const byId2 = new Map(tables.map((t) => [t.id, t]));
-    const connections = [];
+    const raw = [];
     tables.forEach((t) => {
       t.fields.forEach((f, fieldIndex) => {
-        if (f.ref) {
-          connections.push({
+        if (f.ref && !f.brokenRef) {
+          raw.push({
             key: `${t.id}.${f.name}`,
             from: t.id,
+            fieldName: f.name,
             fieldIndex,
             to: f.ref,
-            kind: f.type
+            kind: f.type,
+            reverseField: f.reverseField
           });
         }
       });
     });
+    const connections = mergeReverseFieldPairs(raw);
     const targetGroups = {};
     connections.forEach((c) => {
+      if (c.bidirectional) return;
       (targetGroups[c.to] = targetGroups[c.to] || []).push(c);
     });
     Object.entries(targetGroups).forEach(([targetId, group]) => {
-      const target = byId2.get(targetId);
-      const height = target ? cardHeight(target) : HEADER_H;
+      const height = cardHeight(byId2.get(targetId));
       group.forEach((c, i) => {
         c.targetOffset = computeTargetOffset(i, group.length, height);
       });
@@ -215,6 +279,56 @@
       if (c.to === id) set.add(c.from);
     });
     return set;
+  }
+  function orphanTableIds(tables, connections) {
+    const linked = /* @__PURE__ */ new Set();
+    connections.forEach((c) => {
+      linked.add(c.from);
+      linked.add(c.to);
+    });
+    return new Set(tables.filter((t) => !linked.has(t.id)).map((t) => t.id));
+  }
+
+  // src/data/referenceIntegrity.js
+  function markBrokenReferences(tables) {
+    const existingIds = new Set(tables.map((t) => t.id));
+    return tables.map((t) => ({
+      ...t,
+      fields: t.fields.map((f) => f.ref && !existingIds.has(f.ref) ? { ...f, brokenRef: true } : f)
+    }));
+  }
+
+  // src/data/documentState.js
+  function isEffectivelyEmpty(tables) {
+    if (tables.length === 0) return true;
+    if (tables.length > 1) return false;
+    const [table] = tables;
+    return !table.description && table.fields.every((f) => f.isGeneric);
+  }
+
+  // src/data/health.js
+  function isUntouchedTable(table) {
+    if (table.fields.length !== 3) return false;
+    const names = table.fields.map((f) => f.name).sort().join(",");
+    if (names !== "A,B,C") return false;
+    return table.fields.every((f) => f.isGeneric);
+  }
+  function computeModelHealth(tables) {
+    const genericFields = [];
+    const brokenRefFields = [];
+    const rowIdDisplayFields = [];
+    const emptyColumnFields = [];
+    const untouchedTables = [];
+    tables.forEach((t) => {
+      t.fields.forEach((f) => {
+        if (f.isGeneric) genericFields.push({ table: t.id, field: f.name });
+        if (f.brokenRef) brokenRefFields.push({ table: t.id, field: f.name });
+        if (f.ref && !f.displayColumn) rowIdDisplayFields.push({ table: t.id, field: f.name });
+        if (f.isEmptyColumn) emptyColumnFields.push({ table: t.id, field: f.name });
+      });
+      if (isUntouchedTable(t)) untouchedTables.push(t.id);
+    });
+    return { genericFields, brokenRefFields, rowIdDisplayFields, emptyColumnFields, untouchedTables };
   }
 
   // src/state.js
@@ -266,7 +380,7 @@
     ["text", "Texte"],
     ["numeric", "Num\xE9rique"],
     ["int", "Entier"],
-    ["bool", "Case \xE0 cocher"],
+    ["bool", "Bool\xE9en"],
     ["date", "Date"],
     ["datetime", "Date et heure"],
     ["choice", "Choix unique"],
@@ -297,6 +411,90 @@
     });
   }
 
+  // src/render/health.js
+  function plural(count) {
+    return count > 1 ? "s" : "";
+  }
+  function appendItemList(section, items, onJump) {
+    if (items.length === 0) return;
+    const list = document.createElement("div");
+    list.className = "health-item-list";
+    items.forEach((item) => {
+      const isTableOnly = typeof item === "string";
+      const tableId = isTableOnly ? item : item.table;
+      const fieldName = isTableOnly ? null : item.field;
+      const chip = document.createElement("button");
+      chip.className = "health-item-chip";
+      if (fieldName) {
+        const fieldEl = document.createElement("span");
+        fieldEl.className = "chip-field";
+        fieldEl.textContent = fieldName;
+        const tableEl = document.createElement("span");
+        tableEl.className = "chip-table";
+        tableEl.textContent = tableId;
+        chip.appendChild(fieldEl);
+        chip.appendChild(tableEl);
+      } else {
+        chip.textContent = tableId;
+      }
+      chip.addEventListener("click", () => onJump(tableId, fieldName));
+      list.appendChild(chip);
+    });
+    section.appendChild(list);
+  }
+  function renderIndicator(bodyEl, count, label, items, onJump) {
+    const section = document.createElement("div");
+    section.className = "health-indicator";
+    section.innerHTML = `<div class="health-count">${count}</div><div class="health-label">${label}</div>`;
+    appendItemList(section, items, onJump);
+    bodyEl.appendChild(section);
+  }
+  function renderHealthPanel(bodyEl, health, onJump) {
+    bodyEl.innerHTML = "";
+    renderIndicator(
+      bodyEl,
+      health.genericFields.length,
+      `colonne${plural(health.genericFields.length)} en type g\xE9n\xE9rique (Any) non finalis\xE9${plural(health.genericFields.length)}`,
+      health.genericFields,
+      onJump
+    );
+    renderIndicator(
+      bodyEl,
+      health.brokenRefFields.length,
+      `r\xE9f\xE9rence${plural(health.brokenRefFields.length)} cass\xE9e${plural(health.brokenRefFields.length)} (table cible supprim\xE9e)`,
+      health.brokenRefFields,
+      onJump
+    );
+    renderIndicator(
+      bodyEl,
+      health.rowIdDisplayFields.length,
+      // "Montrer la colonne : Id de ligne" dans Grist : la référence affiche un
+      // identifiant numérique brut (ex. "Agences[321]") plutôt qu'un champ
+      // représentatif — c'est un réglage bel et bien présent dans Grist, pas
+      // une case vide, d'où ce libellé qui décrit l'effet plutôt qu'un oubli.
+      `r\xE9f\xE9rence${plural(health.rowIdDisplayFields.length)} affichant l'identifiant de ligne brut`,
+      health.rowIdDisplayFields,
+      onJump
+    );
+    renderIndicator(
+      bodyEl,
+      health.emptyColumnFields.length,
+      // Vocabulaire Grist : "Colonne vide" est la nature de colonne d'un champ
+      // ajouté mais jamais tranché entre donnée et formule — ce n'est une
+      // "colonne formule" qu'une fois du code écrit dedans.
+      `colonne${plural(health.emptyColumnFields.length)} encore \xE0 l'\xE9tat "Colonne vide"`,
+      health.emptyColumnFields,
+      onJump
+    );
+    renderIndicator(
+      bodyEl,
+      health.untouchedTables.length,
+      `table${plural(health.untouchedTables.length)} encore \xE0 l'\xE9tat de cr\xE9ation (jamais travaill\xE9e${plural(health.untouchedTables.length)})`,
+      health.untouchedTables,
+      onJump
+    );
+  }
+
   // src/escapeHtml.js
   var ESCAPE_MAP = {
     "&": "&amp;",
@@ -309,6 +507,29 @@
     return String(value).replace(/[&<>"']/g, (ch) => ESCAPE_MAP[ch]);
   }
 
+  // src/search.js
+  function fieldMatches(field, q) {
+    return field.name.toLowerCase().includes(q) || field.formula && field.formula.toLowerCase().includes(q) || field.description && field.description.toLowerCase().includes(q);
+  }
+  function tableSearchResult(table, query) {
+    const q = query.trim().toLowerCase();
+    const tableMatch = table.id.toLowerCase().includes(q) || Boolean(table.description && table.description.toLowerCase().includes(q));
+    const matchedFields = new Set(q.length > 0 ? table.fields.filter((f) => fieldMatches(f, q)).map((f) => f.name) : []);
+    const dim = q.length > 0 && !tableMatch && matchedFields.size === 0;
+    return { tableMatch, matchedFields, dim };
+  }
+  function applySearchToCards(canvasContent, tables, query) {
+    const byId2 = new Map(tables.map((t) => [t.id, t]));
+    canvasContent.querySelectorAll(".table-card").forEach((card) => {
+      const table = byId2.get(card.dataset.id);
+      const { matchedFields, dim } = tableSearchResult(table, query);
+      card.querySelectorAll(".field-row").forEach((row) => {
+        row.classList.toggle("is-match", matchedFields.has(row.dataset.field));
+      });
+      card.style.opacity = dim ? "0.28" : "";
+    });
+  }
+
   // src/render/sidebar.js
   function groupTables(tables) {
     const groups = /* @__PURE__ */ new Map();
@@ -318,7 +539,7 @@
     });
     return groups;
   }
-  function renderSidebar(sidebarEl, tables, focusedId, onSelect) {
+  function renderSidebar(sidebarEl, tables, focusedId, onSelect, orphanIds = /* @__PURE__ */ new Set()) {
     sidebarEl.innerHTML = "";
     groupTables(tables).forEach((groupTables_, groupName) => {
       const wrap = document.createElement("div");
@@ -329,46 +550,53 @@
         row.className = "sidebar-row";
         if (t.id === focusedId) row.classList.add("is-focused");
         row.dataset.table = t.id;
-        row.innerHTML = `<span class="name">${escapeHtml(t.id)}</span><span class="count">${t.fields.length}</span>`;
+        const orphanMark = orphanIds.has(t.id) ? '<span class="orphan-dot" title="Aucune liaison entrante ni sortante">\u25CF</span>' : "";
+        row.innerHTML = `<span class="name">${escapeHtml(t.id)}</span>${orphanMark}<span class="count">${t.fields.length}</span>`;
         row.addEventListener("click", () => onSelect(t.id));
         wrap.appendChild(row);
       });
       sidebarEl.appendChild(wrap);
     });
   }
-  function applySidebarSearch(sidebarEl, query) {
-    const q = query.trim().toLowerCase();
+  function applySidebarSearch(sidebarEl, tables, query) {
+    const byId2 = new Map(tables.map((t) => [t.id, t]));
     sidebarEl.querySelectorAll(".sidebar-row").forEach((row) => {
-      const match = q.length === 0 || row.dataset.table.toLowerCase().includes(q);
-      row.classList.toggle("is-dim", !match);
+      const table = byId2.get(row.dataset.table);
+      const { dim } = tableSearchResult(table, query);
+      row.classList.toggle("is-dim", dim);
     });
   }
 
   // src/render/cards.js
   function fieldRowHTML(tableId, field, idx) {
     const isRef = field.type === "ref" || field.type === "reflist";
+    const classes = ["field-row"];
+    if (isRef) classes.push("is-ref");
+    if (field.brokenRef) classes.push("is-broken-ref");
     const safeName = escapeHtml(field.name);
     const safeRef = escapeHtml(field.ref);
-    return `<div class="field-row ${isRef ? "is-ref" : ""}" data-table="${escapeHtml(tableId)}" data-field="${safeName}" data-idx="${idx}">
+    const refHTML = field.brokenRef ? `<span class="fref-broken" title="R\xE9f\xE9rence cass\xE9e : la table \xAB ${safeRef} \xBB n'existe plus">\u26A0 ${safeRef}</span>` : isRef ? `<span class="fref-target" data-jump="${safeRef}">\u2192 ${safeRef}</span>` : "";
+    return `<div class="${classes.join(" ")}" data-table="${escapeHtml(tableId)}" data-field="${safeName}" data-idx="${idx}">
       ${icon(field.type)}
-      <span class="fname">${safeName}</span>
+      <span class="fname${field.description ? " has-desc" : ""}">${safeName}</span>
       ${field.formula ? '<span class="ftag">\u0192x</span>' : ""}
-      ${isRef ? `<span class="fref-target" data-jump="${safeRef}">\u2192 ${safeRef}</span>` : ""}
+      ${refHTML}
     </div>`;
   }
-  function cardHTML(table) {
+  function cardHTML(table, isOrphan) {
     const safeId = escapeHtml(table.id);
     return `
     <div class="card-header">
       <span class="dot"></span>
-      <span class="tname">${safeId}</span>
+      <span class="tname${table.description ? " has-desc" : ""}">${safeId}</span>
+      ${isOrphan ? '<span class="otag" title="Aucune liaison entrante ni sortante">Isol\xE9e</span>' : ""}
       <span class="fcount">${table.fields.length}</span>
     </div>
     <div class="card-body">
       ${table.fields.map((f, i) => fieldRowHTML(table.id, f, i)).join("")}
     </div>`;
   }
-  function renderCards(canvasContent, tables, positions) {
+  function renderCards(canvasContent, tables, positions, orphanIds = /* @__PURE__ */ new Set()) {
     canvasContent.querySelectorAll(".table-card").forEach((el) => el.remove());
     tables.forEach((t) => {
       const pos = positions[t.id];
@@ -378,7 +606,7 @@
       card.style.left = `${pos.x}px`;
       card.style.top = `${pos.y}px`;
       card.style.setProperty("--group-color", GROUP_COLORS[t.group] || "#59736E");
-      card.innerHTML = cardHTML(t);
+      card.innerHTML = cardHTML(t, orphanIds.has(t.id));
       canvasContent.appendChild(card);
     });
   }
@@ -399,6 +627,9 @@
         card.classList.add("is-dragging");
         e.preventDefault();
       });
+      header.addEventListener("mouseenter", () => callbacks.onTableHover(card.dataset.id));
+      header.addEventListener("mousemove", (e) => callbacks.onTableMove(e));
+      header.addEventListener("mouseleave", () => callbacks.onTableLeave());
       window.addEventListener("mousemove", (e) => {
         if (!dragging) return;
         const dx = e.clientX - startX;
@@ -439,9 +670,10 @@
   }
 
   // src/geometry.js
-  function fieldAnchor(positions, tableId, fieldIdx) {
+  function fieldAnchor(positions, tableId, fieldIdx, side = "right") {
     const pos = positions[tableId];
-    return { x: pos.x + CARD_W, y: pos.y + HEADER_H + fieldIdx * ROW_H + ROW_H / 2 };
+    const x = side === "left" ? pos.x : pos.x + CARD_W;
+    return { x, y: pos.y + HEADER_H + fieldIdx * ROW_H + ROW_H / 2 };
   }
   function tableAnchor(positions, tableId, offset = 0) {
     const pos = positions[tableId];
@@ -490,7 +722,7 @@
     const frag = document.createDocumentFragment();
     connections.forEach((c) => {
       const a = fieldAnchor(positions, c.from, c.fieldIndex);
-      const b = tableAnchor(positions, c.to, c.targetOffset);
+      const b = c.bidirectional ? fieldAnchor(positions, c.to, c.toFieldIndex, "left") : tableAnchor(positions, c.to, c.targetOffset);
       const path = document.createElementNS(SVG_NS, "path");
       path.classList.add("wire");
       path.dataset.key = c.key;
@@ -526,8 +758,14 @@
   // src/render/tooltip.js
   function tooltipContent(field, tableName) {
     let extraHTML = "";
+    if (field.description) {
+      extraHTML += `<div class="t-description">${escapeHtml(field.description)}</div>`;
+    }
     if (field.ref) {
-      extraHTML += `<div class="t-label">Cible</div><div class="mono">${escapeHtml(field.ref)}</div>`;
+      extraHTML += `<div class="t-label" style="margin-top:6px;">Cible</div><div class="mono">${escapeHtml(field.ref)}</div>`;
+      if (field.brokenRef) {
+        extraHTML += `<div class="t-broken">\u26A0 Cette table n'existe plus dans le document</div>`;
+      }
       if (field.displayColumn) {
         extraHTML += `<div class="t-display-col">${escapeHtml(field.displayColumn)}</div>`;
       }
@@ -542,6 +780,10 @@
       extraHTML
     };
   }
+  function tableTooltipContent(table) {
+    const extraHTML = table.description ? `<div class="t-description">${escapeHtml(table.description)}</div>` : "";
+    return { tableName: "", name: table.id, typeLabel: "", extraHTML };
+  }
   function tooltipPosition(cursor, tooltipRect, viewport, pad = 14) {
     let x = cursor.x + pad;
     let y = cursor.y + pad;
@@ -552,6 +794,15 @@
   function createTooltipController(tooltipEl, tableEl, nameEl, typeEl, extraEl) {
     function show(field, tableName) {
       const content = tooltipContent(field, tableName);
+      tableEl.textContent = content.tableName;
+      nameEl.textContent = content.name;
+      typeEl.textContent = content.typeLabel;
+      extraEl.innerHTML = content.extraHTML;
+      tooltipEl.classList.add("is-visible");
+    }
+    function showTable(table) {
+      if (!table.description) return;
+      const content = tableTooltipContent(table);
       tableEl.textContent = content.tableName;
       nameEl.textContent = content.name;
       typeEl.textContent = content.typeLabel;
@@ -571,7 +822,7 @@
     function hide() {
       tooltipEl.classList.remove("is-visible");
     }
-    return { show, move, hide };
+    return { show, showTable, move, hide };
   }
 
   // src/focus.js
@@ -586,28 +837,6 @@
       } else {
         card.classList.add("is-dimmed");
       }
-    });
-  }
-
-  // src/search.js
-  function tableSearchResult(table, query) {
-    const q = query.trim().toLowerCase();
-    const tableMatch = table.id.toLowerCase().includes(q);
-    const matchedFields = new Set(
-      q.length > 0 ? table.fields.filter((f) => f.name.toLowerCase().includes(q)).map((f) => f.name) : []
-    );
-    const dim = q.length > 0 && !tableMatch && matchedFields.size === 0;
-    return { tableMatch, matchedFields, dim };
-  }
-  function applySearchToCards(canvasContent, tables, query) {
-    const byId2 = new Map(tables.map((t) => [t.id, t]));
-    canvasContent.querySelectorAll(".table-card").forEach((card) => {
-      const table = byId2.get(card.dataset.id);
-      const { matchedFields, dim } = tableSearchResult(table, query);
-      card.querySelectorAll(".field-row").forEach((row) => {
-        row.classList.toggle("is-match", matchedFields.has(row.dataset.field));
-      });
-      card.style.opacity = dim ? "0.28" : "";
     });
   }
 
@@ -642,14 +871,26 @@
   }
 
   // src/app.js
-  function initApp(dom2, tables = TABLES) {
+  function initApp(dom2, rawTables = TABLES) {
+    const tables = markBrokenReferences(rawTables);
     const connections = buildConnections(tables);
+    const orphanIds = orphanTableIds(tables, connections);
     const state = createState(tables);
     dom2.statTables.textContent = String(tables.length);
     dom2.statFields.textContent = String(tables.reduce((n, t) => n + t.fields.length, 0));
     dom2.statLinks.textContent = String(connections.length);
+    const showEmptyState = isEffectivelyEmpty(tables);
+    dom2.emptyState.classList.toggle("is-visible", showEmptyState);
+    if (showEmptyState) return { state, connections, setFocus: () => {
+    } };
     renderLegend(dom2.legendBody);
     bindLegendToggle(dom2.legend, dom2.legendToggle);
+    renderHealthPanel(
+      dom2.healthBody,
+      computeModelHealth(tables),
+      (tableId, fieldName) => fieldName ? jumpToField(tableId, fieldName) : jumpTo(tableId)
+    );
+    bindLegendToggle(dom2.healthPanel, dom2.healthToggle);
     const tooltip = createTooltipController(dom2.tooltip, dom2.ttTable, dom2.ttName, dom2.ttType, dom2.ttExtra);
     function applyZoom() {
       dom2.canvasContent.style.transform = `scale(${state.zoom})`;
@@ -679,8 +920,8 @@
       dom2.canvasWrap.scrollTop = bounds.minY * state.zoom - (viewport.height - contentH) / 2;
     }
     function renderAll() {
-      renderSidebar(dom2.sidebar, tables, state.focused, (id) => setFocus(state.focused === id ? null : id));
-      renderCards(dom2.canvasContent, tables, state.positions);
+      renderSidebar(dom2.sidebar, tables, state.focused, (id) => setFocus(state.focused === id ? null : id), orphanIds);
+      renderCards(dom2.canvasContent, tables, state.positions, orphanIds);
       attachCardBehaviors(dom2.canvasContent, state.positions, {
         onCardMoved: () => {
           renderWires(dom2.wires, connections, state.positions);
@@ -703,19 +944,37 @@
           state.hoveredConn = null;
           updateWireVisibility(dom2.wires, connections, state);
         },
-        onRefJump: (targetId) => jumpTo(targetId)
+        onRefJump: (targetId) => jumpTo(targetId),
+        onTableHover: (tableId) => tooltip.showTable(tableById(tables, tableId)),
+        onTableMove: (event) => tooltip.move(event),
+        onTableLeave: () => tooltip.hide()
       }, () => state.zoom);
       renderWires(dom2.wires, connections, state.positions);
       updateWireVisibility(dom2.wires, connections, state);
       applyFocusStyles(dom2.canvasContent, connections, state.focused);
     }
     function scrollToCard(tableId) {
-      const card = dom2.canvasContent.querySelector(`.table-card[data-id="${tableId}"]`);
+      const card = dom2.canvasContent.querySelector(`.table-card[data-id="${CSS.escape(tableId)}"]`);
       if (card) card.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
     }
     function jumpTo(tableId) {
       setFocus(tableId);
       scrollToCard(tableId);
+    }
+    function jumpToField(tableId, fieldName) {
+      setFocus(tableId);
+      const row = dom2.canvasContent.querySelector(
+        `.table-card[data-id="${CSS.escape(tableId)}"] .field-row[data-field="${CSS.escape(fieldName)}"]`
+      );
+      if (!row) {
+        scrollToCard(tableId);
+        return;
+      }
+      row.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      row.classList.remove("is-jump-target");
+      void row.offsetWidth;
+      row.classList.add("is-jump-target");
+      row.addEventListener("animationend", () => row.classList.remove("is-jump-target"), { once: true });
     }
     function setFocus(id) {
       state.focused = id;
@@ -727,12 +986,18 @@
       }
       applyFocusStyles(dom2.canvasContent, connections, state.focused);
       updateWireVisibility(dom2.wires, connections, state);
-      renderSidebar(dom2.sidebar, tables, state.focused, (rowId) => setFocus(state.focused === rowId ? null : rowId));
+      renderSidebar(
+        dom2.sidebar,
+        tables,
+        state.focused,
+        (rowId) => setFocus(state.focused === rowId ? null : rowId),
+        orphanIds
+      );
     }
     dom2.search.addEventListener("input", (e) => {
       state.search = e.target.value;
       applySearchToCards(dom2.canvasContent, tables, state.search);
-      applySidebarSearch(dom2.sidebar, state.search);
+      applySidebarSearch(dom2.sidebar, tables, state.search);
     });
     dom2.modeFocusBtn.addEventListener("click", () => {
       state.showAll = false;
@@ -792,7 +1057,7 @@
 
   // src/data/gristTypeMapping.js
   function mapGristType(rawType) {
-    if (!rawType) return { type: "text" };
+    if (!rawType || rawType === "Any") return { type: "text", isGeneric: true };
     if (rawType.startsWith("Ref:")) return { type: "ref", ref: rawType.slice(4) };
     if (rawType.startsWith("RefList:")) return { type: "reflist", ref: rawType.slice(8) };
     if (rawType.startsWith("DateTime")) return { type: "datetime" };
@@ -818,6 +1083,24 @@
     }
   }
 
+  // src/data/tableGrouping.js
+  function extractGroupPrefix(tableId) {
+    const match = String(tableId).match(/^([A-Za-z]+)\d*_/);
+    return match ? match[1] : null;
+  }
+  function assignGroupsByPrefix(tables) {
+    const counts = /* @__PURE__ */ new Map();
+    tables.forEach((t) => {
+      const prefix = extractGroupPrefix(t.id);
+      if (prefix) counts.set(prefix, (counts.get(prefix) || 0) + 1);
+    });
+    return tables.map((t) => {
+      const prefix = extractGroupPrefix(t.id);
+      const group = prefix && counts.get(prefix) > 1 ? prefix : "Tables";
+      return { ...t, group };
+    });
+  }
+
   // src/data/gristSource.js
   var HIDDEN_COL_IDS = /* @__PURE__ */ new Set(["manualSort"]);
   function isHiddenColumn(colId) {
@@ -841,27 +1124,43 @@
       (t) => !t.summarySourceTable && !String(t.tableId).startsWith("_grist_")
     );
     const columnsById = new Map(columnRows.map((c) => [c.id, c]));
+    const tableIdById = new Map(tableRows.map((t) => [t.id, t.tableId]));
     const tables = visibleTables.map((t) => {
       const fields = columnRows.filter((c) => c.parentId === t.id && !isHiddenColumn(c.colId)).sort((a, b) => a.parentPos - b.parentPos).map((c) => {
-        const { type, ref } = mapGristType(c.type);
+        const { type, ref, isGeneric } = mapGristType(c.type);
         const field = { name: c.label || c.colId, type };
+        if (isGeneric && !c.isFormula) field.isGeneric = true;
         if (ref) {
           field.ref = ref;
           const displayCol = c.visibleCol ? columnsById.get(c.visibleCol) : null;
           if (displayCol) field.displayColumn = displayCol.label || displayCol.colId;
+          const reverseCol = c.reverseCol ? columnsById.get(c.reverseCol) : null;
+          if (reverseCol) {
+            const reverseTableId = tableIdById.get(reverseCol.parentId);
+            if (reverseTableId) {
+              field.reverseField = { table: reverseTableId, name: reverseCol.label || reverseCol.colId };
+            }
+          }
         }
-        if (c.isFormula && c.formula) field.formula = c.formula;
+        if (c.isFormula) {
+          if (c.formula) field.formula = c.formula;
+          else field.isEmptyColumn = true;
+        }
+        if (c.description) field.description = c.description;
         return field;
       });
-      return { id: t.tableId, group: "Tables", fields };
+      const table = { id: t.tableId, fields };
+      if (t.description) table.description = t.description;
+      return table;
     });
     tables.sort((a, b) => a.id.localeCompare(b.id, "fr", { numeric: true, sensitivity: "base" }));
-    const positions = computeGridLayout(tables);
-    tables.forEach((t) => {
+    const groupedTables = assignGroupsByPrefix(tables);
+    const positions = computeGridLayout(groupedTables);
+    groupedTables.forEach((t) => {
       t.x = positions[t.id].x;
       t.y = positions[t.id].y;
     });
-    return tables;
+    return groupedTables;
   }
   async function loadFromGrist() {
     const [tableColValues, columnColValues] = await Promise.all([
@@ -935,6 +1234,7 @@
     sidebar: byId("sidebar"),
     canvasWrap: byId("canvas-wrap"),
     canvasContent: byId("canvas-content"),
+    emptyState: byId("empty-state"),
     wires: byId("wires"),
     zoomIn: byId("zoom-in"),
     zoomOut: byId("zoom-out"),
@@ -946,6 +1246,9 @@
     legend: byId("legend"),
     legendToggle: byId("legend-toggle"),
     legendBody: byId("legend-body"),
+    healthPanel: byId("health-panel"),
+    healthToggle: byId("health-toggle"),
+    healthBody: byId("health-body"),
     tooltip: byId("tooltip"),
     ttTable: byId("tt-table"),
     ttName: byId("tt-name"),
