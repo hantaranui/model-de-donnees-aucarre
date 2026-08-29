@@ -7,7 +7,9 @@ export function renderWires(svg, connections, positions) {
   const frag = document.createDocumentFragment();
   connections.forEach((c) => {
     const a = fieldAnchor(positions, c.from, c.fieldIndex);
-    const b = tableAnchor(positions, c.to, c.targetOffset);
+    const b = c.bidirectional
+      ? fieldAnchor(positions, c.to, c.toFieldIndex, "left")
+      : tableAnchor(positions, c.to, c.targetOffset);
 
     const path = document.createElementNS(SVG_NS, "path");
     path.classList.add("wire");

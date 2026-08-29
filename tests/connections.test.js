@@ -89,6 +89,74 @@ describe("computeTargetOffset", () => {
   });
 });
 
+describe("buildConnections — paires bidirectionnelles (reverseCol)", () => {
+  const withMirrorPair = [
+    {
+      id: "Formations",
+      fields: [
+        {
+          name: "Chapitres",
+          type: "reflist",
+          ref: "Chapitre_stats",
+          reverseField: { table: "Chapitre_stats", name: "Formation" }
+        }
+      ]
+    },
+    {
+      id: "Chapitre_stats",
+      fields: [
+        { name: "Titre", type: "text" },
+        {
+          name: "Formation",
+          type: "ref",
+          ref: "Formations",
+          reverseField: { table: "Formations", name: "Chapitres" }
+        }
+      ]
+    }
+  ];
+
+  it("fusionne une paire mutuelle en une seule liaison champ-à-champ", () => {
+    const connections = buildConnections(withMirrorPair);
+    expect(connections).toHaveLength(1);
+    expect(connections[0]).toMatchObject({
+      from: "Formations",
+      fieldIndex: 0,
+      to: "Chapitre_stats",
+      toFieldIndex: 1,
+      bidirectional: true
+    });
+  });
+
+  it("ne fusionne pas quand le pointeur miroir n'est pas mutuel", () => {
+    const oneSided = [
+      {
+        id: "Formations",
+        fields: [{ name: "Chapitres", type: "reflist", ref: "Chapitre_stats" }]
+      },
+      {
+        id: "Chapitre_stats",
+        fields: [
+          {
+            name: "Formation",
+            type: "ref",
+            ref: "Formations",
+            reverseField: { table: "Formations", name: "Chapitres" }
+          }
+        ]
+      }
+    ];
+    const connections = buildConnections(oneSided);
+    expect(connections).toHaveLength(2);
+    expect(connections.every((c) => !c.bidirectional)).toBe(true);
+  });
+
+  it("une liaison fusionnée n'a pas de targetOffset", () => {
+    const connections = buildConnections(withMirrorPair);
+    expect(connections[0].targetOffset).toBeUndefined();
+  });
+});
+
 describe("connectedTables", () => {
   it("retourne les tables liées dans les deux sens", () => {
     const connections = buildConnections(TABLES);

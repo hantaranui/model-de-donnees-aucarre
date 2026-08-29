@@ -39,6 +39,9 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
   // la retrouver parmi TOUTES les colonnes du document, pas juste celles de
   // la table courante.
   const columnsById = new Map(columnRows.map((c) => [c.id, c]));
+  // Idem pour reverseCol : retrouver le nom Grist (tableId) de la table qui
+  // porte la colonne miroir à partir de son id interne (parentId).
+  const tableIdById = new Map(tableRows.map((t) => [t.id, t.tableId]));
 
   const tables = visibleTables.map((t) => {
     const fields = columnRows
@@ -51,6 +54,17 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
           field.ref = ref;
           const displayCol = c.visibleCol ? columnsById.get(c.visibleCol) : null;
           if (displayCol) field.displayColumn = displayCol.label || displayCol.colId;
+          // reverseCol : Grist lie automatiquement deux colonnes Référence
+          // miroir (ex. Formations.Chapitres <-> Chapitre_stats.Formation).
+          // Ce pointeur permet de fusionner la paire en une seule liaison au
+          // lieu de deux flèches qui se croisent (voir buildConnections).
+          const reverseCol = c.reverseCol ? columnsById.get(c.reverseCol) : null;
+          if (reverseCol) {
+            const reverseTableId = tableIdById.get(reverseCol.parentId);
+            if (reverseTableId) {
+              field.reverseField = { table: reverseTableId, name: reverseCol.label || reverseCol.colId };
+            }
+          }
         }
         if (c.isFormula && c.formula) field.formula = c.formula;
         if (c.description) field.description = c.description;

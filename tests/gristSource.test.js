@@ -149,6 +149,46 @@ describe("buildTablesFromGristMetadata", () => {
     expect(utilisateurs.fields.find((f) => f.name === "Nom").description).toBeUndefined();
   });
 
+  it("résout reverseCol vers la table et le champ portant la colonne miroir", () => {
+    const rows = [
+      { id: 1, tableId: "Formations", summarySourceTable: 0 },
+      { id: 2, tableId: "Chapitre_stats", summarySourceTable: 0 }
+    ];
+    const cols = [
+      {
+        id: 10,
+        parentId: 1,
+        parentPos: 1,
+        colId: "Chapitres",
+        type: "RefList:Chapitre_stats",
+        label: "Chapitres",
+        isFormula: false,
+        formula: "",
+        reverseCol: 20
+      },
+      {
+        id: 20,
+        parentId: 2,
+        parentPos: 1,
+        colId: "Formation",
+        type: "Ref:Formations",
+        label: "Formation",
+        isFormula: false,
+        formula: "",
+        reverseCol: 10
+      }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, cols);
+    const chapitresField = tables.find((t) => t.id === "Formations").fields[0];
+    expect(chapitresField.reverseField).toEqual({ table: "Chapitre_stats", name: "Formation" });
+  });
+
+  it("n'ajoute pas reverseField quand reverseCol n'est pas défini", () => {
+    const tables = buildTablesFromGristMetadata(tableRows, columnRows);
+    const abonnementField = tables.find((t) => t.id === "Utilisateurs").fields.find((f) => f.name === "Abonnement");
+    expect(abonnementField.reverseField).toBeUndefined();
+  });
+
   it("regroupe les tables par préfixe de nom partagé (T01_, T02_...)", () => {
     const rows = [
       { id: 1, tableId: "T01_Client", summarySourceTable: 0 },

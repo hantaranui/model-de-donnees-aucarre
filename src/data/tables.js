@@ -61,7 +61,12 @@ export const TABLES = [
       { name: "PrixParticulier", type: "numeric" },
       { name: "Description", type: "longtext" },
       { name: "AttestationDoc", type: "attachment" },
-      { name: "Chapitres", type: "reflist", ref: "Chapitre_stats" }
+      {
+        name: "Chapitres",
+        type: "reflist",
+        ref: "Chapitre_stats",
+        reverseField: { table: "Chapitre_stats", name: "Formation" }
+      }
     ]
   },
   {
@@ -71,7 +76,12 @@ export const TABLES = [
     y: 580,
     fields: [
       { name: "Titre", type: "text" },
-      { name: "Formation", type: "ref", ref: "Formations" },
+      {
+        name: "Formation",
+        type: "ref",
+        ref: "Formations",
+        reverseField: { table: "Formations", name: "Chapitres" }
+      },
       { name: "Likes", type: "int" },
       { name: "Dislikes", type: "int" },
       { name: "Ordre", type: "int" },
