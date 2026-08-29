@@ -6,7 +6,7 @@ export const TYPE_LABELS = {
   bool: "Case à cocher",
   date: "Date",
   datetime: "Date et heure",
-  choice: "Choix",
+  choice: "Choix unique",
   choicelist: "Choix multiple",
   attachment: "Pièce jointe",
   ref: "Référence",

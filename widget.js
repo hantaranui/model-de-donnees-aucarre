@@ -131,7 +131,7 @@
     bool: "Case \xE0 cocher",
     date: "Date",
     datetime: "Date et heure",
-    choice: "Choix",
+    choice: "Choix unique",
     choicelist: "Choix multiple",
     attachment: "Pi\xE8ce jointe",
     ref: "R\xE9f\xE9rence",
@@ -269,7 +269,7 @@
     ["bool", "Case \xE0 cocher"],
     ["date", "Date"],
     ["datetime", "Date et heure"],
-    ["choice", "Choix"],
+    ["choice", "Choix unique"],
     ["choicelist", "Choix multiple"],
     ["attachment", "Pi\xE8ce jointe"]
   ];

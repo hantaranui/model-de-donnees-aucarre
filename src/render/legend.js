@@ -7,7 +7,7 @@ const LEGEND_TYPES = [
   ["bool", "Case à cocher"],
   ["date", "Date"],
   ["datetime", "Date et heure"],
-  ["choice", "Choix"],
+  ["choice", "Choix unique"],
   ["choicelist", "Choix multiple"],
   ["attachment", "Pièce jointe"]
 ];
