@@ -3,7 +3,7 @@ export const TYPE_LABELS = {
   longtext: "Texte", // Grist ne distingue pas texte et texte long
   numeric: "Numérique",
   int: "Entier",
-  bool: "Case à cocher",
+  bool: "Booléen",
   date: "Date",
   datetime: "Date et heure",
   choice: "Choix unique",
