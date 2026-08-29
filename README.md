@@ -19,7 +19,7 @@ npm install
 npm run dev
 ```
 
-Ouvre `http://localhost:5173` : hors d'une iframe Grist, le widget affiche un jeu de données de démonstration (voir `src/data/tables.js`).
+Ouvre `http://localhost:5173` : hors d'une iframe Grist, le widget affiche un jeu de données de démonstration (voir `src/data/tables.js`). `npm run dev` recompile `widget.js` à chaque modification (mode watch) et sert le dossier courant.
 
 Pour tester avec un vrai document Grist, ajoute un widget "URL personnalisée" pointant vers cette adresse locale dans une page Grist, puis autorise l'accès complet au document quand c'est demandé.
 
@@ -29,17 +29,18 @@ Pour tester avec un vrai document Grist, ajoute un widget "URL personnalisée" p
 npm run build
 ```
 
-Produit un dossier `dist/` statique. Pour publier sur GitHub Pages :
+Regroupe `src/main.js` et tout ce qu'il importe en un seul fichier `widget.js` à la racine du repo (esbuild, format IIFE). `index.html` le charge directement (`<script src="widget.js">`) et ne bouge jamais — pas de dossier de sortie séparé, pas de distinction entre version "source" et version "publiée" : `widget.js` est commité dans le repo, comme le reste du code.
+
+Pour publier une nouvelle version sur GitHub Pages :
 
 ```bash
 npm run build
-rm -rf docs && cp -r dist docs
-git add docs && git commit -m "Rebuild docs/" && git push
+git add widget.js
+git commit -m "Rebuild widget.js"
+git push
 ```
 
-`docs/` est commité dans le repo (contrairement à `dist/`, ignoré) : GitHub Pages le sert directement en mode "Deploy from a branch" (dossier `/docs`), sans étape de build côté GitHub. `index.html` reste à la racine pour `npm run dev` — c'est le fichier source, pas le build.
-
-L'URL GitHub Pages qui en résulte (`https://<compte>.github.io/<repo>/`) est celle à utiliser comme widget custom dans Grist.
+GitHub Pages sert la racine du repo tel quel ("Deploy from a branch", dossier `/ (root)`) — aucune étape de build côté GitHub. L'URL qui en résulte (`https://<compte>.github.io/<repo>/`) est celle à utiliser comme widget custom dans Grist.
 
 ### Tests
 
@@ -71,6 +72,7 @@ src/
   layout.js    disposition automatique des cartes
   zoom.js      calculs de zoom / ajustement à l'écran
 tests/         tests unitaires (Vitest) sur les modules purs
+widget.js      généré par `npm run build` (esbuild) — ne pas éditer à la main
 ```
 
 La logique métier (mapping de types, calculs géométriques, layout, recherche, focus) est séparée du rendu DOM pour rester testable sans navigateur.

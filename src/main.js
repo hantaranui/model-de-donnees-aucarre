@@ -1,4 +1,3 @@
-import "./style.css";
 import { initApp } from "./app.js";
 import { TABLES } from "./data/tables.js";
 import { loadFromGrist } from "./data/gristSource.js";
