@@ -26,6 +26,7 @@ const dom = {
   sidebar: byId("sidebar"),
   canvasWrap: byId("canvas-wrap"),
   canvasContent: byId("canvas-content"),
+  emptyState: byId("empty-state"),
   wires: byId("wires"),
   zoomIn: byId("zoom-in"),
   zoomOut: byId("zoom-out"),

@@ -1,6 +1,7 @@
 import { TABLES, tableById } from "./data/tables.js";
 import { buildConnections, orphanTableIds } from "./data/connections.js";
 import { markBrokenReferences } from "./data/referenceIntegrity.js";
+import { isEffectivelyEmpty } from "./data/documentState.js";
 import { createState, resetPositions } from "./state.js";
 import { renderLegend, bindLegendToggle } from "./render/legend.js";
 import { renderSidebar, applySidebarSearch } from "./render/sidebar.js";
@@ -22,6 +23,12 @@ export function initApp(dom, rawTables = TABLES) {
   dom.statTables.textContent = String(tables.length);
   dom.statFields.textContent = String(tables.reduce((n, t) => n + t.fields.length, 0));
   dom.statLinks.textContent = String(connections.length);
+
+  // Document vide (nouveau document, ou table par défaut jamais touchée) :
+  // un guide de démarrage vaut mieux qu'un canvas vide et silencieux.
+  const showEmptyState = isEffectivelyEmpty(tables);
+  dom.emptyState.classList.toggle("is-visible", showEmptyState);
+  if (showEmptyState) return { state, connections, setFocus: () => {} };
 
   renderLegend(dom.legendBody);
   bindLegendToggle(dom.legend, dom.legendToggle);
