@@ -80,3 +80,7 @@ La logique métier (mapping de types, calculs géométriques, layout, recherche,
 ## Sécurité
 
 Les noms de tables/champs viennent du document Grist (texte libre modifiable par n'importe quel éditeur) et sont échappés avant insertion dans le DOM (`src/escapeHtml.js`) pour éviter toute injection HTML.
+
+## Crédits
+
+Développé par **au carré** — Hanta C., avec l'assistance de [Claude Code](https://claude.com/claude-code) (Anthropic).
