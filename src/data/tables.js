@@ -7,11 +7,18 @@ export const TABLES = [
     group: "Comptes",
     x: 320,
     y: 580,
+    description: "Un compte apprenant. Créé automatiquement à la première connexion via le SSO du client.",
     fields: [
       { name: "Nom", type: "text" },
       { name: "Email", type: "text" },
       { name: "DateInscription", type: "date" },
-      { name: "Abonnement", type: "ref", ref: "Abonnement", displayColumn: "Statut" },
+      {
+        name: "Abonnement",
+        type: "ref",
+        ref: "Abonnement",
+        displayColumn: "Statut",
+        description: "L'abonnement individuel de l'utilisateur, distinct de celui de son grand compte le cas échéant."
+      },
       { name: "GrandCompte", type: "ref", ref: "Auxiliaires_GrandCompte" },
       { name: "FormationsSuivies", type: "reflist", ref: "Formations" }
     ]
@@ -39,7 +46,11 @@ export const TABLES = [
       { name: "NomCompte", type: "text" },
       { name: "NbAuxiliaires", type: "int" },
       { name: "DateDebut", type: "date" },
-      { name: "DateExpiration", type: "date", formula: "rec.DateDebut + 365" }
+      { name: "DateExpiration", type: "date", formula: "rec.DateDebut + 365" },
+      // Référence cassée : la table visée n'existe plus (colonne oubliée
+      // après une suppression). Exemple de démo pour la détection dédiée
+      // (brokenRef est calculé automatiquement par markBrokenReferences).
+      { name: "AncienneOffre", type: "ref", ref: "Offres_Archivees" }
     ]
   },
   {
@@ -54,7 +65,12 @@ export const TABLES = [
       { name: "PrixParticulier", type: "numeric" },
       { name: "Description", type: "longtext" },
       { name: "AttestationDoc", type: "attachment" },
-      { name: "Chapitres", type: "reflist", ref: "Chapitre_stats" }
+      {
+        name: "Chapitres",
+        type: "reflist",
+        ref: "Chapitre_stats",
+        reverseField: { table: "Chapitre_stats", name: "Formation" }
+      }
     ]
   },
   {
@@ -64,7 +80,12 @@ export const TABLES = [
     y: 580,
     fields: [
       { name: "Titre", type: "text" },
-      { name: "Formation", type: "ref", ref: "Formations" },
+      {
+        name: "Formation",
+        type: "ref",
+        ref: "Formations",
+        reverseField: { table: "Formations", name: "Chapitres" }
+      },
       { name: "Likes", type: "int" },
       { name: "Dislikes", type: "int" },
       { name: "Ordre", type: "int" },
@@ -108,6 +129,18 @@ export const TABLES = [
       { name: "Chapitre", type: "ref", ref: "Chapitre_stats" },
       { name: "Quiz", type: "choice" },
       { name: "BonneRep", type: "text" }
+    ]
+  },
+  {
+    id: "Parametres",
+    group: "Système",
+    x: 1430,
+    y: 1120,
+    description: "Réglages globaux de la plateforme (une seule ligne en pratique). Table volontairement isolée.",
+    fields: [
+      { name: "NomPlateforme", type: "text" },
+      { name: "ContactSupport", type: "text" },
+      { name: "MaintenanceActive", type: "bool" }
     ]
   }
 ];

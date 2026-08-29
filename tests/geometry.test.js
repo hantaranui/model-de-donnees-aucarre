@@ -3,10 +3,17 @@ import { fieldAnchor, tableAnchor, elbowPath, cardinalityMarker, connectorPath }
 import { CARD_W, HEADER_H, ROW_H } from "../src/constants.js";
 
 describe("fieldAnchor", () => {
-  it("place l'ancre au bord droit de la carte, au niveau de la ligne du champ", () => {
+  it("place l'ancre au bord droit de la carte par défaut, au niveau de la ligne du champ", () => {
     const positions = { Formations: { x: 100, y: 50 } };
     const anchor = fieldAnchor(positions, "Formations", 2);
     expect(anchor.x).toBe(100 + CARD_W);
+    expect(anchor.y).toBe(50 + HEADER_H + 2 * ROW_H + ROW_H / 2);
+  });
+
+  it("place l'ancre au bord gauche quand side vaut 'left'", () => {
+    const positions = { Formations: { x: 100, y: 50 } };
+    const anchor = fieldAnchor(positions, "Formations", 2, "left");
+    expect(anchor.x).toBe(100);
     expect(anchor.y).toBe(50 + HEADER_H + 2 * ROW_H + ROW_H / 2);
   });
 });

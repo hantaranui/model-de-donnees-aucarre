@@ -5,7 +5,7 @@ Widget custom pour [Grist](https://www.getgrist.com/) qui affiche le modèle de 
 ## Fonctionnalités
 
 - Lecture automatique des tables, colonnes, types et formules du document Grist (accès complet requis, voir plus bas).
-- Icônes par type de colonne (Texte, Numérique, Entier, Case à cocher, Date, Date et heure, Choix, Choix multiple, Pièce jointe, Référence, Référence multiple).
+- Icônes par type de colonne (Texte, Numérique, Entier, Booléen, Date, Date et heure, Choix, Choix multiple, Pièce jointe, Référence, Référence multiple).
 - Liaisons dessinées en connecteurs coudés, avec les marques de cardinalité (pied de corbeau) déduites du schéma.
 - Mode focus (isole une table et ses liaisons directes) et mode "toutes les liaisons".
 - Recherche de table/champ, zoom (molette + Ctrl/Cmd, boutons, ajustement automatique), cartes déplaçables.

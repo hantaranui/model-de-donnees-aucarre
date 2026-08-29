@@ -4,7 +4,7 @@ const LEGEND_TYPES = [
   ["text", "Texte"],
   ["numeric", "Numérique"],
   ["int", "Entier"],
-  ["bool", "Case à cocher"],
+  ["bool", "Booléen"],
   ["date", "Date"],
   ["datetime", "Date et heure"],
   ["choice", "Choix unique"],

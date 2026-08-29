@@ -31,4 +31,40 @@ describe("fieldRowHTML", () => {
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
   });
+
+  it("champ avec description : porte la classe has-desc", () => {
+    const html = fieldRowHTML("Formations", { name: "Titre", type: "text", description: "Le titre affiché." }, 0);
+    expect(html).toContain("has-desc");
+  });
+
+  it("champ sans description : pas de classe has-desc", () => {
+    const html = fieldRowHTML("Formations", { name: "Titre", type: "text" }, 0);
+    expect(html).not.toContain("has-desc");
+  });
+
+  it("référence cassée : porte la classe is-broken-ref et un badge dédié, pas de lien data-jump", () => {
+    const html = fieldRowHTML(
+      "Auxiliaires_GrandCompte",
+      { name: "AncienneOffre", type: "ref", ref: "Offres_Archivees", brokenRef: true },
+      0
+    );
+    expect(html).toContain("is-broken-ref");
+    expect(html).toContain("fref-broken");
+    expect(html).not.toContain("data-jump");
+  });
+
+  it("référence valide : pas de classe is-broken-ref", () => {
+    const html = fieldRowHTML("Utilisateurs", { name: "Abonnement", type: "ref", ref: "Abonnement" }, 0);
+    expect(html).not.toContain("is-broken-ref");
+  });
+
+  it("échappe la table cible d'une référence cassée", () => {
+    const html = fieldRowHTML(
+      "A",
+      { name: "X", type: "ref", ref: `"><script>alert(1)</script>`, brokenRef: true },
+      0
+    );
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+  });
 });

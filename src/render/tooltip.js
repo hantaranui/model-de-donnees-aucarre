@@ -5,8 +5,14 @@ import { escapeHtml } from "../escapeHtml.js";
 // donné, avec le nom de sa table en en-tête.
 export function tooltipContent(field, tableName) {
   let extraHTML = "";
+  if (field.description) {
+    extraHTML += `<div class="t-description">${escapeHtml(field.description)}</div>`;
+  }
   if (field.ref) {
-    extraHTML += `<div class="t-label">Cible</div><div class="mono">${escapeHtml(field.ref)}</div>`;
+    extraHTML += `<div class="t-label" style="margin-top:6px;">Cible</div><div class="mono">${escapeHtml(field.ref)}</div>`;
+    if (field.brokenRef) {
+      extraHTML += `<div class="t-broken">⚠ Cette table n'existe plus dans le document</div>`;
+    }
     if (field.displayColumn) {
       extraHTML += `<div class="t-display-col">${escapeHtml(field.displayColumn)}</div>`;
     }
@@ -22,6 +28,13 @@ export function tooltipContent(field, tableName) {
   };
 }
 
+// Fonction pure : calcule le contenu du tooltip affiché au survol de l'en-tête
+// d'une carte (description de table uniquement, pas de type/champ).
+export function tableTooltipContent(table) {
+  const extraHTML = table.description ? `<div class="t-description">${escapeHtml(table.description)}</div>` : "";
+  return { tableName: "", name: table.id, typeLabel: "", extraHTML };
+}
+
 // Fonction pure : place le tooltip près du curseur sans déborder de la fenêtre.
 export function tooltipPosition(cursor, tooltipRect, viewport, pad = 14) {
   let x = cursor.x + pad;
@@ -34,6 +47,18 @@ export function tooltipPosition(cursor, tooltipRect, viewport, pad = 14) {
 export function createTooltipController(tooltipEl, tableEl, nameEl, typeEl, extraEl) {
   function show(field, tableName) {
     const content = tooltipContent(field, tableName);
+    tableEl.textContent = content.tableName;
+    nameEl.textContent = content.name;
+    typeEl.textContent = content.typeLabel;
+    extraEl.innerHTML = content.extraHTML;
+    tooltipEl.classList.add("is-visible");
+  }
+
+  // Ne s'affiche que si la table a une description : sinon il n'y a rien à
+  // montrer de plus que le nom déjà visible dans l'en-tête de la carte.
+  function showTable(table) {
+    if (!table.description) return;
+    const content = tableTooltipContent(table);
     tableEl.textContent = content.tableName;
     nameEl.textContent = content.name;
     typeEl.textContent = content.typeLabel;
@@ -56,5 +81,5 @@ export function createTooltipController(tooltipEl, tableEl, nameEl, typeEl, extr
     tooltipEl.classList.remove("is-visible");
   }
 
-  return { show, move, hide };
+  return { show, showTable, move, hide };
 }

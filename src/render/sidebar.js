@@ -1,4 +1,5 @@
 import { escapeHtml } from "../escapeHtml.js";
+import { tableSearchResult } from "../search.js";
 
 // Regroupe les tables par groupe métier, dans l'ordre de première apparition.
 export function groupTables(tables) {
@@ -10,7 +11,7 @@ export function groupTables(tables) {
   return groups;
 }
 
-export function renderSidebar(sidebarEl, tables, focusedId, onSelect) {
+export function renderSidebar(sidebarEl, tables, focusedId, onSelect, orphanIds = new Set()) {
   sidebarEl.innerHTML = "";
   groupTables(tables).forEach((groupTables_, groupName) => {
     const wrap = document.createElement("div");
@@ -21,7 +22,10 @@ export function renderSidebar(sidebarEl, tables, focusedId, onSelect) {
       row.className = "sidebar-row";
       if (t.id === focusedId) row.classList.add("is-focused");
       row.dataset.table = t.id;
-      row.innerHTML = `<span class="name">${escapeHtml(t.id)}</span><span class="count">${t.fields.length}</span>`;
+      const orphanMark = orphanIds.has(t.id)
+        ? '<span class="orphan-dot" title="Aucune liaison entrante ni sortante">●</span>'
+        : "";
+      row.innerHTML = `<span class="name">${escapeHtml(t.id)}</span>${orphanMark}<span class="count">${t.fields.length}</span>`;
       row.addEventListener("click", () => onSelect(t.id));
       wrap.appendChild(row);
     });
@@ -29,10 +33,14 @@ export function renderSidebar(sidebarEl, tables, focusedId, onSelect) {
   });
 }
 
-export function applySidebarSearch(sidebarEl, query) {
-  const q = query.trim().toLowerCase();
+// Estompe une table dans la sidebar seulement si ni elle ni aucun de ses
+// champs ne correspond à la recherche (même critère que sur le canvas :
+// nom, formule ou description — voir tableSearchResult).
+export function applySidebarSearch(sidebarEl, tables, query) {
+  const byId = new Map(tables.map((t) => [t.id, t]));
   sidebarEl.querySelectorAll(".sidebar-row").forEach((row) => {
-    const match = q.length === 0 || row.dataset.table.toLowerCase().includes(q);
-    row.classList.toggle("is-dim", !match);
+    const table = byId.get(row.dataset.table);
+    const { dim } = tableSearchResult(table, query);
+    row.classList.toggle("is-dim", dim);
   });
 }

@@ -58,11 +58,32 @@
           </div>
         </div>
 
+        <div class="empty-state" id="empty-state">
+          <div class="empty-state-card">
+            <h2>Ce document ne contient encore aucune table</h2>
+            <p>Modèle de données affichera ici les tables, leurs champs et les liaisons entre elles dès que le document en contiendra. Quelques repères pour bien démarrer :</p>
+            <ul>
+              <li>Une table par entité principale : <span class="mono">Utilisateurs</span>, <span class="mono">Commandes</span>, <span class="mono">Produits</span>…</li>
+              <li>Les colonnes <span class="mono">Référence</span> et <span class="mono">Référence multiple</span> créent les liaisons entre tables dessinées ici.</li>
+              <li>Les listes fixes (statuts, catégories…) gagnent à être des tables séparées, préfixées par exemple <span class="mono">Ref_</span> (<span class="mono">Ref_Statut</span>, <span class="mono">Ref_Pays</span>) : ce préfixe partagé est détecté automatiquement pour regrouper les tables dans la barre latérale.</li>
+              <li>Une description de table ou de champ ("Mettre une description" dans le panneau de configuration Grist) apparaît ici au survol.</li>
+            </ul>
+          </div>
+        </div>
+
         <div class="focus-banner" id="focus-banner">
           <span>Focus — <span class="mono" id="focus-name">Table</span></span>
           <button id="focus-clear" title="Quitter le mode focus">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 5l10 10M15 5 5 15"/></svg>
           </button>
+        </div>
+
+        <div class="health-panel is-collapsed" id="health-panel">
+          <div class="health-head" id="health-toggle">
+            <span>Santé du modèle</span>
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg>
+          </div>
+          <div class="health-body" id="health-body"></div>
         </div>
 
         <div class="legend is-collapsed" id="legend">

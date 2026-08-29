@@ -1,8 +1,12 @@
 import { CARD_W, HEADER_H, ROW_H } from "./constants.js";
 
-export function fieldAnchor(positions, tableId, fieldIdx) {
+// side: "right" (par défaut, bord droit de la carte — champ source d'une
+// liaison classique) ou "left" (bord gauche — utilisé pour cibler
+// précisément le champ miroir d'une paire de références bidirectionnelles).
+export function fieldAnchor(positions, tableId, fieldIdx, side = "right") {
   const pos = positions[tableId];
-  return { x: pos.x + CARD_W, y: pos.y + HEADER_H + fieldIdx * ROW_H + ROW_H / 2 };
+  const x = side === "left" ? pos.x : pos.x + CARD_W;
+  return { x, y: pos.y + HEADER_H + fieldIdx * ROW_H + ROW_H / 2 };
 }
 
 export function tableAnchor(positions, tableId, offset = 0) {

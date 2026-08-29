@@ -4,22 +4,31 @@ import { escapeHtml } from "../escapeHtml.js";
 
 export function fieldRowHTML(tableId, field, idx) {
   const isRef = field.type === "ref" || field.type === "reflist";
+  const classes = ["field-row"];
+  if (isRef) classes.push("is-ref");
+  if (field.brokenRef) classes.push("is-broken-ref");
   const safeName = escapeHtml(field.name);
   const safeRef = escapeHtml(field.ref);
-  return `<div class="field-row ${isRef ? "is-ref" : ""}" data-table="${escapeHtml(tableId)}" data-field="${safeName}" data-idx="${idx}">
+  const refHTML = field.brokenRef
+    ? `<span class="fref-broken" title="Référence cassée : la table « ${safeRef} » n'existe plus">⚠ ${safeRef}</span>`
+    : isRef
+      ? `<span class="fref-target" data-jump="${safeRef}">→ ${safeRef}</span>`
+      : "";
+  return `<div class="${classes.join(" ")}" data-table="${escapeHtml(tableId)}" data-field="${safeName}" data-idx="${idx}">
       ${icon(field.type)}
-      <span class="fname">${safeName}</span>
+      <span class="fname${field.description ? " has-desc" : ""}">${safeName}</span>
       ${field.formula ? '<span class="ftag">ƒx</span>' : ""}
-      ${isRef ? `<span class="fref-target" data-jump="${safeRef}">→ ${safeRef}</span>` : ""}
+      ${refHTML}
     </div>`;
 }
 
-function cardHTML(table) {
+function cardHTML(table, isOrphan) {
   const safeId = escapeHtml(table.id);
   return `
     <div class="card-header">
       <span class="dot"></span>
-      <span class="tname">${safeId}</span>
+      <span class="tname${table.description ? " has-desc" : ""}">${safeId}</span>
+      ${isOrphan ? '<span class="otag" title="Aucune liaison entrante ni sortante">Isolée</span>' : ""}
       <span class="fcount">${table.fields.length}</span>
     </div>
     <div class="card-body">
@@ -27,7 +36,7 @@ function cardHTML(table) {
     </div>`;
 }
 
-export function renderCards(canvasContent, tables, positions) {
+export function renderCards(canvasContent, tables, positions, orphanIds = new Set()) {
   canvasContent.querySelectorAll(".table-card").forEach((el) => el.remove());
   tables.forEach((t) => {
     const pos = positions[t.id];
@@ -37,14 +46,15 @@ export function renderCards(canvasContent, tables, positions) {
     card.style.left = `${pos.x}px`;
     card.style.top = `${pos.y}px`;
     card.style.setProperty("--group-color", GROUP_COLORS[t.group] || "#59736E");
-    card.innerHTML = cardHTML(t);
+    card.innerHTML = cardHTML(t, orphanIds.has(t.id));
     canvasContent.appendChild(card);
   });
 }
 
 // callbacks: { onCardMoved(tableId), onCardToggled(tableId), onFieldHover(row, event),
 //              onFieldMove(event), onFieldLeave(), onRefEnter(row), onRefLeave(),
-//              onRefJump(targetTableId) }
+//              onRefJump(targetTableId), onTableHover(tableId, event), onTableMove(event),
+//              onTableLeave() }
 // getZoom: () => number courant du zoom, pour convertir un déplacement de
 // souris (pixels écran) en déplacement dans l'espace non zoomé du canvas.
 export function attachCardBehaviors(canvasContent, positions, callbacks, getZoom = () => 1) {
@@ -65,6 +75,10 @@ export function attachCardBehaviors(canvasContent, positions, callbacks, getZoom
       card.classList.add("is-dragging");
       e.preventDefault();
     });
+
+    header.addEventListener("mouseenter", () => callbacks.onTableHover(card.dataset.id));
+    header.addEventListener("mousemove", (e) => callbacks.onTableMove(e));
+    header.addEventListener("mouseleave", () => callbacks.onTableLeave());
 
     window.addEventListener("mousemove", (e) => {
       if (!dragging) return;

@@ -17,8 +17,13 @@
   --tooltip-accent: #44F8CC;
   --tooltip-focus-accent: #FF9470;
   --tooltip-yellow-accent: #F4E04D;
+  --tooltip-notice-accent: #FFB454;
   --formula: #D9603A;
   --formula-soft: #FDEAE3;
+  /* Couleur dédiée aux signalements (table isolée, référence cassée...) :
+     distincte de --formula pour ne pas laisser croire à une formule. */
+  --notice: #B8860B;
+  --notice-soft: #FBF1DC;
   /* Couleur dédiée au "mode focus" (sélection d'une table) : volontairement
      distincte de --accent/--accent-strong, qui restent la couleur des
      liaisons et des références. */
@@ -49,8 +54,11 @@
     --tooltip-accent: #0FAE93;
     --tooltip-focus-accent: #F77245;
     --tooltip-yellow-accent: #7A6300;
+    --tooltip-notice-accent: #8A5A00;
     --formula: #FF9470;
     --formula-soft: rgba(247, 114, 69, 0.16);
+    --notice: #F4C24D;
+    --notice-soft: rgba(244, 194, 77, 0.16);
     --focus-accent: #FF9470;
     --focus-accent-soft: rgba(247, 114, 69, 0.18);
     --header-tint: var(--focus-accent-soft);
@@ -77,8 +85,11 @@
   --tooltip-accent: #0FAE93;
   --tooltip-focus-accent: #F77245;
   --tooltip-yellow-accent: #7A6300;
+  --tooltip-notice-accent: #8A5A00;
   --formula: #FF9470;
   --formula-soft: rgba(247, 114, 69, 0.16);
+  --notice: #F4C24D;
+  --notice-soft: rgba(244, 194, 77, 0.16);
   --focus-accent: #FF9470;
   --focus-accent-soft: rgba(247, 114, 69, 0.18);
   --header-tint: var(--focus-accent-soft);
@@ -330,6 +341,12 @@ html, body {
   flex: none;
   font-variant-numeric: tabular-nums;
 }
+.sidebar-row .orphan-dot {
+  font-size: 8px;
+  color: var(--notice);
+  flex: none;
+  cursor: help;
+}
 .sidebar-row.is-dim .name { color: var(--text-faint); }
 
 /* ---------- Canvas ---------- */
@@ -428,11 +445,26 @@ html, body {
   white-space: nowrap;
   flex: 1;
 }
+.card-header .tname.has-desc {
+  text-decoration: underline dotted var(--text-faint);
+  text-underline-offset: 3px;
+}
 .card-header .fcount {
   font-size: 10px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
   flex: none;
+}
+.card-header .otag {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--notice);
+  background: var(--notice-soft);
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex: none;
+  letter-spacing: 0.02em;
+  cursor: help;
 }
 
 .field-row {
@@ -446,6 +478,13 @@ html, body {
 }
 .field-row:first-of-type { border-top: none; }
 .field-row.is-match { background: var(--accent-soft); }
+/* Ligne ciblée depuis un renvoi externe (ex. tableau de bord santé) : flash
+   temporaire pour la repérer immédiatement parmi les champs de la carte. */
+.field-row.is-jump-target { animation: field-jump-flash 1500ms ease; }
+@keyframes field-jump-flash {
+  0%, 15% { background: var(--notice-soft); }
+  100% { background: transparent; }
+}
 .field-row .ficon {
   width: 15px; height: 15px; flex: none; color: var(--text-faint);
   display: flex; align-items: center; justify-content: center;
@@ -459,6 +498,10 @@ html, body {
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+}
+.field-row .fname.has-desc {
+  text-decoration: underline dotted var(--text-faint);
+  text-underline-offset: 2px;
 }
 .field-row .ftag {
   font-size: 9.5px;
@@ -482,6 +525,18 @@ html, body {
   cursor: pointer;
 }
 .field-row.is-ref:hover { background: var(--accent-soft); }
+.field-row .fref-broken {
+  font-size: 10px;
+  color: var(--notice);
+  font-weight: 600;
+  flex: none;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+.field-row.is-broken-ref:hover { background: var(--notice-soft); }
 
 /* ---------- Legend ---------- */
 .legend {
@@ -530,6 +585,98 @@ html, body {
 }
 .legend-item .ficon { width: 14px; height: 14px; color: var(--text-faint); flex: none; }
 .legend-item.ref .ficon { color: var(--accent-strong); }
+
+/* ---------- Santé du modèle ---------- */
+.health-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px var(--shadow);
+  width: 226px;
+  z-index: 15;
+  overflow: hidden;
+}
+.health-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.health-head svg { width: 12px; height: 12px; transition: transform 150ms ease; color: var(--text-faint); }
+.health-panel.is-collapsed .health-head svg { transform: rotate(-90deg); }
+.health-body {
+  padding: 2px 12px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.health-panel.is-collapsed .health-body { display: none; }
+.health-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.health-indicator:first-child { padding-top: 0; border-top: none; }
+.health-count {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.health-label { font-size: 11px; color: var(--text-muted); line-height: 1.35; }
+.health-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+.health-item-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--notice);
+  background: var(--notice-soft);
+  border: none;
+  border-radius: 4px;
+  padding: 3px 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.health-item-chip:hover { filter: brightness(0.95); }
+/* Le nom de champ passe en premier et en évidence : c'est l'info
+   actionnable. Le nom de table (souvent bien plus long sur un vrai document)
+   vient en second plan en dessous, quitte à être tronqué lui — pas le champ. */
+.health-item-chip .chip-field {
+  font-weight: 700;
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.health-item-chip .chip-table {
+  font-size: 9px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ---------- Zoom ---------- */
 .zoom-controls {
@@ -662,6 +809,72 @@ html, body {
   letter-spacing: 0.06em;
   opacity: 0.6;
   margin-bottom: 2px;
+}
+.tooltip .t-description {
+  opacity: 0.85;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.tooltip .t-broken {
+  color: var(--tooltip-notice-accent);
+  font-weight: 600;
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+/* ---------- Écran d'accueil (document vide) ---------- */
+.empty-state {
+  position: absolute;
+  inset: 0;
+  /* Au-dessus du reste du canvas (cartes, légende, zoom...) : ces contrôles
+     ne sont de toute façon pas câblés quand le document est vide. */
+  z-index: 18;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: var(--bg);
+}
+.empty-state.is-visible { display: flex; }
+.empty-state-card {
+  max-width: 480px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px 32px;
+  box-shadow: 0 10px 26px var(--shadow);
+}
+.empty-state-card h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+.empty-state-card p {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.empty-state-card ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.empty-state-card li {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.empty-state-card .mono {
+  font-size: 11px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--text);
 }
 
 /* ---------- Chargement / erreur ---------- */

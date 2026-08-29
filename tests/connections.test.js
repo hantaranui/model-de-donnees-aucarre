@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildConnections, connectedTables, computeTargetOffset } from "../src/data/connections.js";
+import { buildConnections, connectedTables, computeTargetOffset, orphanTableIds } from "../src/data/connections.js";
 import { HEADER_H, ROW_H } from "../src/constants.js";
 
 const TABLES = [
@@ -89,6 +89,74 @@ describe("computeTargetOffset", () => {
   });
 });
 
+describe("buildConnections — paires bidirectionnelles (reverseCol)", () => {
+  const withMirrorPair = [
+    {
+      id: "Formations",
+      fields: [
+        {
+          name: "Chapitres",
+          type: "reflist",
+          ref: "Chapitre_stats",
+          reverseField: { table: "Chapitre_stats", name: "Formation" }
+        }
+      ]
+    },
+    {
+      id: "Chapitre_stats",
+      fields: [
+        { name: "Titre", type: "text" },
+        {
+          name: "Formation",
+          type: "ref",
+          ref: "Formations",
+          reverseField: { table: "Formations", name: "Chapitres" }
+        }
+      ]
+    }
+  ];
+
+  it("fusionne une paire mutuelle en une seule liaison champ-à-champ", () => {
+    const connections = buildConnections(withMirrorPair);
+    expect(connections).toHaveLength(1);
+    expect(connections[0]).toMatchObject({
+      from: "Formations",
+      fieldIndex: 0,
+      to: "Chapitre_stats",
+      toFieldIndex: 1,
+      bidirectional: true
+    });
+  });
+
+  it("ne fusionne pas quand le pointeur miroir n'est pas mutuel", () => {
+    const oneSided = [
+      {
+        id: "Formations",
+        fields: [{ name: "Chapitres", type: "reflist", ref: "Chapitre_stats" }]
+      },
+      {
+        id: "Chapitre_stats",
+        fields: [
+          {
+            name: "Formation",
+            type: "ref",
+            ref: "Formations",
+            reverseField: { table: "Formations", name: "Chapitres" }
+          }
+        ]
+      }
+    ];
+    const connections = buildConnections(oneSided);
+    expect(connections).toHaveLength(2);
+    expect(connections.every((c) => !c.bidirectional)).toBe(true);
+  });
+
+  it("une liaison fusionnée n'a pas de targetOffset", () => {
+    const connections = buildConnections(withMirrorPair);
+    expect(connections[0].targetOffset).toBeUndefined();
+  });
+});
+
 describe("connectedTables", () => {
   it("retourne les tables liées dans les deux sens", () => {
     const connections = buildConnections(TABLES);
@@ -99,5 +167,37 @@ describe("connectedTables", () => {
   it("retourne un set vide pour une table sans liaison", () => {
     const connections = buildConnections(TABLES);
     expect(connectedTables(connections, "Inconnue").size).toBe(0);
+  });
+});
+
+describe("buildConnections — références cassées", () => {
+  it("ne crée pas de liaison pour un champ marqué brokenRef", () => {
+    const tables = [
+      { id: "A", fields: [{ name: "X", type: "ref", ref: "Inexistante", brokenRef: true }] }
+    ];
+    const connections = buildConnections(tables);
+    expect(connections).toHaveLength(0);
+  });
+});
+
+describe("orphanTableIds", () => {
+  it("ne retient que les tables sans aucune liaison entrante ni sortante", () => {
+    const tables = [...TABLES, { id: "Isolee", fields: [{ name: "Note", type: "text" }] }];
+    const connections = buildConnections(tables);
+    expect(orphanTableIds(tables, connections)).toEqual(new Set(["Isolee"]));
+  });
+
+  it("renvoie un set vide quand toutes les tables sont liées", () => {
+    const connections = buildConnections(TABLES);
+    expect(orphanTableIds(TABLES, connections).size).toBe(0);
+  });
+
+  it("une table cible d'une référence n'est pas orpheline", () => {
+    const tables = [
+      { id: "A", fields: [{ name: "Ref", type: "ref", ref: "B" }] },
+      { id: "B", fields: [{ name: "Nom", type: "text" }] }
+    ];
+    const connections = buildConnections(tables);
+    expect(orphanTableIds(tables, connections)).toEqual(new Set());
   });
 });

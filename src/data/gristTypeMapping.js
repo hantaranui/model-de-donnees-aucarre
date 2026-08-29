@@ -2,7 +2,11 @@
 // interne _grist_Tables_column) vers les clés de type utilisées par ce
 // widget (voir src/constants.js et src/icons.js).
 export function mapGristType(rawType) {
-  if (!rawType) return { type: "text" };
+  // "Any" (ou son équivalent vide) est la valeur littérale que Grist assigne
+  // à une colonne tant que son type n'a jamais été choisi explicitement —
+  // pas juste un type qu'on ne sait pas afficher (isGeneric distingue les
+  // deux pour le tableau de bord santé du modèle).
+  if (!rawType || rawType === "Any") return { type: "text", isGeneric: true };
   if (rawType.startsWith("Ref:")) return { type: "ref", ref: rawType.slice(4) };
   if (rawType.startsWith("RefList:")) return { type: "reflist", ref: rawType.slice(8) };
   if (rawType.startsWith("DateTime")) return { type: "datetime" };
@@ -25,8 +29,9 @@ export function mapGristType(rawType) {
     case "Attachments":
       return { type: "attachment" };
     default:
-      // Types "Any", "Id" ou tout type futur non géré : on retombe sur du texte
-      // plutôt que de laisser un champ sans icône.
+      // Type "Id" ou tout type futur non géré : un vrai type existe, on ne
+      // sait juste pas encore l'afficher — ce n'est pas la même situation
+      // qu'une colonne jamais finalisée, donc pas de isGeneric ici.
       return { type: "text" };
   }
 }

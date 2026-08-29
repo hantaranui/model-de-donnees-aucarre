@@ -1,5 +1,6 @@
 import { mapGristType } from "./gristTypeMapping.js";
 import { computeGridLayout } from "../layout.js";
+import { assignGroupsByPrefix } from "./tableGrouping.js";
 
 const HIDDEN_COL_IDS = new Set(["manualSort"]);
 
@@ -38,24 +39,53 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
   // la retrouver parmi TOUTES les colonnes du document, pas juste celles de
   // la table courante.
   const columnsById = new Map(columnRows.map((c) => [c.id, c]));
+  // Idem pour reverseCol : retrouver le nom Grist (tableId) de la table qui
+  // porte la colonne miroir à partir de son id interne (parentId).
+  const tableIdById = new Map(tableRows.map((t) => [t.id, t.tableId]));
 
   const tables = visibleTables.map((t) => {
     const fields = columnRows
       .filter((c) => c.parentId === t.id && !isHiddenColumn(c.colId))
       .sort((a, b) => a.parentPos - b.parentPos)
       .map((c) => {
-        const { type, ref } = mapGristType(c.type);
+        const { type, ref, isGeneric } = mapGristType(c.type);
         const field = { name: c.label || c.colId, type };
+        // Laisser une colonne formule en type "Non défini" est un usage
+        // Grist courant et volontaire (le type suit alors la valeur
+        // calculée) — ce n'est un vrai oubli que pour une colonne de
+        // données classique, jamais typée par son auteur.
+        if (isGeneric && !c.isFormula) field.isGeneric = true;
         if (ref) {
           field.ref = ref;
           const displayCol = c.visibleCol ? columnsById.get(c.visibleCol) : null;
           if (displayCol) field.displayColumn = displayCol.label || displayCol.colId;
+          // reverseCol : Grist lie automatiquement deux colonnes Référence
+          // miroir (ex. Formations.Chapitres <-> Chapitre_stats.Formation).
+          // Ce pointeur permet de fusionner la paire en une seule liaison au
+          // lieu de deux flèches qui se croisent (voir buildConnections).
+          const reverseCol = c.reverseCol ? columnsById.get(c.reverseCol) : null;
+          if (reverseCol) {
+            const reverseTableId = tableIdById.get(reverseCol.parentId);
+            if (reverseTableId) {
+              field.reverseField = { table: reverseTableId, name: reverseCol.label || reverseCol.colId };
+            }
+          }
         }
-        if (c.isFormula && c.formula) field.formula = c.formula;
+        if (c.isFormula) {
+          if (c.formula) field.formula = c.formula;
+          // isFormula vrai sans texte de formule : c'est l'état "Colonne
+          // vide" de Grist (colonne ajoutée, jamais tranchée entre donnée et
+          // formule) — pas une "colonne formule" au sens de Grist tant
+          // qu'aucun code n'y a été écrit (voir tableau de bord santé).
+          else field.isEmptyColumn = true;
+        }
+        if (c.description) field.description = c.description;
         return field;
       });
 
-    return { id: t.tableId, group: "Tables", fields };
+    const table = { id: t.tableId, fields };
+    if (t.description) table.description = t.description;
+    return table;
   });
 
   // _grist_Tables renvoie les tables dans leur ordre de création dans le
@@ -63,13 +93,15 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
   // est prévisible d'une ouverture à l'autre, indépendamment de cet historique.
   tables.sort((a, b) => a.id.localeCompare(b.id, "fr", { numeric: true, sensitivity: "base" }));
 
-  const positions = computeGridLayout(tables);
-  tables.forEach((t) => {
+  const groupedTables = assignGroupsByPrefix(tables);
+
+  const positions = computeGridLayout(groupedTables);
+  groupedTables.forEach((t) => {
     t.x = positions[t.id].x;
     t.y = positions[t.id].y;
   });
 
-  return tables;
+  return groupedTables;
 }
 
 // Point d'entrée réel : lit le document Grist courant via le plugin API.

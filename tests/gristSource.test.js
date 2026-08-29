@@ -112,6 +112,140 @@ describe("buildTablesFromGristMetadata", () => {
     expect(formations.fields.find((f) => f.name === "JoursRestants").formula).toBe("rec.Date - TODAY()");
   });
 
+  it("reprend la description d'une table quand _grist_Tables en fournit une", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0, description: "Une table de test." }];
+    const tables = buildTablesFromGristMetadata(rows, []);
+    expect(tables[0].description).toBe("Une table de test.");
+  });
+
+  it("n'ajoute pas de description de table quand elle est vide", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0, description: "" }];
+    const tables = buildTablesFromGristMetadata(rows, []);
+    expect(tables[0].description).toBeUndefined();
+  });
+
+  it("reprend la description d'une colonne quand _grist_Tables_column en fournit une", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0 }];
+    const cols = [
+      {
+        id: 10,
+        parentId: 1,
+        parentPos: 1,
+        colId: "Nom",
+        type: "Text",
+        label: "Nom",
+        isFormula: false,
+        formula: "",
+        description: "Le nom complet."
+      }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, cols);
+    expect(tables[0].fields[0].description).toBe("Le nom complet.");
+  });
+
+  it("n'ajoute pas de description de colonne quand elle est absente", () => {
+    const tables = buildTablesFromGristMetadata(tableRows, columnRows);
+    const utilisateurs = tables.find((t) => t.id === "Utilisateurs");
+    expect(utilisateurs.fields.find((f) => f.name === "Nom").description).toBeUndefined();
+  });
+
+  it("marque isEmptyColumn quand isFormula est vrai mais que le texte de la formule est vide (état 'Colonne vide' de Grist)", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0 }];
+    const cols = [
+      { id: 10, parentId: 1, parentPos: 1, colId: "Calc", type: "Any", label: "Calc", isFormula: true, formula: "" }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, cols);
+    expect(tables[0].fields[0].isEmptyColumn).toBe(true);
+    expect(tables[0].fields[0].formula).toBeUndefined();
+  });
+
+  it("n'ajoute pas isEmptyColumn à une formule non vide ni à une colonne normale", () => {
+    const tables = buildTablesFromGristMetadata(tableRows, columnRows);
+    const formations = tables.find((t) => t.id === "Formations");
+    expect(formations.fields.find((f) => f.name === "JoursRestants").isEmptyColumn).toBeUndefined();
+    expect(formations.fields.find((f) => f.name === "Titre").isEmptyColumn).toBeUndefined();
+  });
+
+  it("n'ajoute pas isGeneric à une colonne formule de type 'Non défini' tant que la formule n'est pas vide", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0 }];
+    const cols = [
+      {
+        id: 10,
+        parentId: 1,
+        parentPos: 1,
+        colId: "Mail_normalise",
+        type: "Any",
+        label: "Mail normalisé",
+        isFormula: true,
+        formula: '($Mail or "").strip().lower()'
+      }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, cols);
+    expect(tables[0].fields[0].isGeneric).toBeUndefined();
+    expect(tables[0].fields[0].formula).toBe('($Mail or "").strip().lower()');
+  });
+
+  it("ajoute isGeneric à une colonne de données classique jamais typée (pas de formule)", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0 }];
+    const cols = [
+      { id: 10, parentId: 1, parentPos: 1, colId: "X", type: "Any", label: "X", isFormula: false, formula: "" }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, cols);
+    expect(tables[0].fields[0].isGeneric).toBe(true);
+  });
+
+  it("résout reverseCol vers la table et le champ portant la colonne miroir", () => {
+    const rows = [
+      { id: 1, tableId: "Formations", summarySourceTable: 0 },
+      { id: 2, tableId: "Chapitre_stats", summarySourceTable: 0 }
+    ];
+    const cols = [
+      {
+        id: 10,
+        parentId: 1,
+        parentPos: 1,
+        colId: "Chapitres",
+        type: "RefList:Chapitre_stats",
+        label: "Chapitres",
+        isFormula: false,
+        formula: "",
+        reverseCol: 20
+      },
+      {
+        id: 20,
+        parentId: 2,
+        parentPos: 1,
+        colId: "Formation",
+        type: "Ref:Formations",
+        label: "Formation",
+        isFormula: false,
+        formula: "",
+        reverseCol: 10
+      }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, cols);
+    const chapitresField = tables.find((t) => t.id === "Formations").fields[0];
+    expect(chapitresField.reverseField).toEqual({ table: "Chapitre_stats", name: "Formation" });
+  });
+
+  it("n'ajoute pas reverseField quand reverseCol n'est pas défini", () => {
+    const tables = buildTablesFromGristMetadata(tableRows, columnRows);
+    const abonnementField = tables.find((t) => t.id === "Utilisateurs").fields.find((f) => f.name === "Abonnement");
+    expect(abonnementField.reverseField).toBeUndefined();
+  });
+
+  it("regroupe les tables par préfixe de nom partagé (T01_, T02_...)", () => {
+    const rows = [
+      { id: 1, tableId: "T01_Client", summarySourceTable: 0 },
+      { id: 2, tableId: "T02_Commande", summarySourceTable: 0 },
+      { id: 3, tableId: "Divers", summarySourceTable: 0 }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, []);
+    expect(tables.find((t) => t.id === "T01_Client").group).toBe("T");
+    expect(tables.find((t) => t.id === "T02_Commande").group).toBe("T");
+    expect(tables.find((t) => t.id === "Divers").group).toBe("Tables");
+  });
+
   it("assigne à chaque table une position calculée", () => {
     const tables = buildTablesFromGristMetadata(tableRows, columnRows);
     tables.forEach((t) => {

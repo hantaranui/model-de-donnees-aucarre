@@ -27,9 +27,12 @@ describe("mapGristType", () => {
     expect(mapGristType("RefList:Chapitre_stats")).toEqual({ type: "reflist", ref: "Chapitre_stats" });
   });
 
-  it("type vide ou inconnu retombe sur texte", () => {
-    expect(mapGristType("")).toEqual({ type: "text" });
-    expect(mapGristType("Any")).toEqual({ type: "text" });
+  it("type vide ou 'Any' : colonne jamais finalisée, retombe sur texte et se signale comme générique", () => {
+    expect(mapGristType("")).toEqual({ type: "text", isGeneric: true });
+    expect(mapGristType("Any")).toEqual({ type: "text", isGeneric: true });
+  });
+
+  it("type futur inconnu du mapping : retombe sur texte sans se signaler comme générique", () => {
     expect(mapGristType("TypeFuturInconnu")).toEqual({ type: "text" });
   });
 });
