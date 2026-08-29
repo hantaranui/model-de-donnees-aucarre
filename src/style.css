@@ -478,6 +478,13 @@ html, body {
 }
 .field-row:first-of-type { border-top: none; }
 .field-row.is-match { background: var(--accent-soft); }
+/* Ligne ciblée depuis un renvoi externe (ex. tableau de bord santé) : flash
+   temporaire pour la repérer immédiatement parmi les champs de la carte. */
+.field-row.is-jump-target { animation: field-jump-flash 1500ms ease; }
+@keyframes field-jump-flash {
+  0%, 15% { background: var(--notice-soft); }
+  100% { background: transparent; }
+}
 .field-row .ficon {
   width: 15px; height: 15px; flex: none; color: var(--text-faint);
   display: flex; align-items: center; justify-content: center;
@@ -578,6 +585,98 @@ html, body {
 }
 .legend-item .ficon { width: 14px; height: 14px; color: var(--text-faint); flex: none; }
 .legend-item.ref .ficon { color: var(--accent-strong); }
+
+/* ---------- Santé du modèle ---------- */
+.health-panel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px var(--shadow);
+  width: 226px;
+  z-index: 15;
+  overflow: hidden;
+}
+.health-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.health-head svg { width: 12px; height: 12px; transition: transform 150ms ease; color: var(--text-faint); }
+.health-panel.is-collapsed .health-head svg { transform: rotate(-90deg); }
+.health-body {
+  padding: 2px 12px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.health-panel.is-collapsed .health-body { display: none; }
+.health-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.health-indicator:first-child { padding-top: 0; border-top: none; }
+.health-count {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.health-label { font-size: 11px; color: var(--text-muted); line-height: 1.35; }
+.health-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+.health-item-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--notice);
+  background: var(--notice-soft);
+  border: none;
+  border-radius: 4px;
+  padding: 3px 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.health-item-chip:hover { filter: brightness(0.95); }
+/* Le nom de champ passe en premier et en évidence : c'est l'info
+   actionnable. Le nom de table (souvent bien plus long sur un vrai document)
+   vient en second plan en dessous, quitte à être tronqué lui — pas le champ. */
+.health-item-chip .chip-field {
+  font-weight: 700;
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.health-item-chip .chip-table {
+  font-size: 9px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* ---------- Zoom ---------- */
 .zoom-controls {

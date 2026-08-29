@@ -149,6 +149,51 @@ describe("buildTablesFromGristMetadata", () => {
     expect(utilisateurs.fields.find((f) => f.name === "Nom").description).toBeUndefined();
   });
 
+  it("marque isEmptyColumn quand isFormula est vrai mais que le texte de la formule est vide (état 'Colonne vide' de Grist)", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0 }];
+    const cols = [
+      { id: 10, parentId: 1, parentPos: 1, colId: "Calc", type: "Any", label: "Calc", isFormula: true, formula: "" }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, cols);
+    expect(tables[0].fields[0].isEmptyColumn).toBe(true);
+    expect(tables[0].fields[0].formula).toBeUndefined();
+  });
+
+  it("n'ajoute pas isEmptyColumn à une formule non vide ni à une colonne normale", () => {
+    const tables = buildTablesFromGristMetadata(tableRows, columnRows);
+    const formations = tables.find((t) => t.id === "Formations");
+    expect(formations.fields.find((f) => f.name === "JoursRestants").isEmptyColumn).toBeUndefined();
+    expect(formations.fields.find((f) => f.name === "Titre").isEmptyColumn).toBeUndefined();
+  });
+
+  it("n'ajoute pas isGeneric à une colonne formule de type 'Non défini' tant que la formule n'est pas vide", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0 }];
+    const cols = [
+      {
+        id: 10,
+        parentId: 1,
+        parentPos: 1,
+        colId: "Mail_normalise",
+        type: "Any",
+        label: "Mail normalisé",
+        isFormula: true,
+        formula: '($Mail or "").strip().lower()'
+      }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, cols);
+    expect(tables[0].fields[0].isGeneric).toBeUndefined();
+    expect(tables[0].fields[0].formula).toBe('($Mail or "").strip().lower()');
+  });
+
+  it("ajoute isGeneric à une colonne de données classique jamais typée (pas de formule)", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0 }];
+    const cols = [
+      { id: 10, parentId: 1, parentPos: 1, colId: "X", type: "Any", label: "X", isFormula: false, formula: "" }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, cols);
+    expect(tables[0].fields[0].isGeneric).toBe(true);
+  });
+
   it("résout reverseCol vers la table et le champ portant la colonne miroir", () => {
     const rows = [
       { id: 1, tableId: "Formations", summarySourceTable: 0 },

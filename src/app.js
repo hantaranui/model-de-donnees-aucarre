@@ -2,8 +2,10 @@ import { TABLES, tableById } from "./data/tables.js";
 import { buildConnections, orphanTableIds } from "./data/connections.js";
 import { markBrokenReferences } from "./data/referenceIntegrity.js";
 import { isEffectivelyEmpty } from "./data/documentState.js";
+import { computeModelHealth } from "./data/health.js";
 import { createState, resetPositions } from "./state.js";
 import { renderLegend, bindLegendToggle } from "./render/legend.js";
+import { renderHealthPanel } from "./render/health.js";
 import { renderSidebar, applySidebarSearch } from "./render/sidebar.js";
 import { renderCards, attachCardBehaviors } from "./render/cards.js";
 import { renderWires, updateWireVisibility } from "./render/wires.js";
@@ -32,6 +34,12 @@ export function initApp(dom, rawTables = TABLES) {
 
   renderLegend(dom.legendBody);
   bindLegendToggle(dom.legend, dom.legendToggle);
+
+  renderHealthPanel(dom.healthBody, computeModelHealth(tables), (tableId, fieldName) =>
+    fieldName ? jumpToField(tableId, fieldName) : jumpTo(tableId)
+  );
+  // Bascule collapse/expand générique : même comportement que la légende.
+  bindLegendToggle(dom.healthPanel, dom.healthToggle);
 
   const tooltip = createTooltipController(dom.tooltip, dom.ttTable, dom.ttName, dom.ttType, dom.ttExtra);
 
@@ -104,13 +112,33 @@ export function initApp(dom, rawTables = TABLES) {
   }
 
   function scrollToCard(tableId) {
-    const card = dom.canvasContent.querySelector(`.table-card[data-id="${tableId}"]`);
+    const card = dom.canvasContent.querySelector(`.table-card[data-id="${CSS.escape(tableId)}"]`);
     if (card) card.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
   }
 
   function jumpTo(tableId) {
     setFocus(tableId);
     scrollToCard(tableId);
+  }
+
+  // Cible une ligne de champ précise (ex. depuis le tableau de bord santé) :
+  // sur une carte à beaucoup de champs, sauter juste à la table ne suffit
+  // pas à repérer laquelle est en cause, surtout si son nom est tronqué dans
+  // le panneau — on scrolle jusqu'à la ligne et on la fait flasher.
+  function jumpToField(tableId, fieldName) {
+    setFocus(tableId);
+    const row = dom.canvasContent.querySelector(
+      `.table-card[data-id="${CSS.escape(tableId)}"] .field-row[data-field="${CSS.escape(fieldName)}"]`
+    );
+    if (!row) {
+      scrollToCard(tableId);
+      return;
+    }
+    row.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    row.classList.remove("is-jump-target");
+    void row.offsetWidth; // relance l'animation même si la même ligne est reciblée coup sur coup
+    row.classList.add("is-jump-target");
+    row.addEventListener("animationend", () => row.classList.remove("is-jump-target"), { once: true });
   }
 
   function setFocus(id) {

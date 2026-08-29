@@ -48,8 +48,13 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
       .filter((c) => c.parentId === t.id && !isHiddenColumn(c.colId))
       .sort((a, b) => a.parentPos - b.parentPos)
       .map((c) => {
-        const { type, ref } = mapGristType(c.type);
+        const { type, ref, isGeneric } = mapGristType(c.type);
         const field = { name: c.label || c.colId, type };
+        // Laisser une colonne formule en type "Non défini" est un usage
+        // Grist courant et volontaire (le type suit alors la valeur
+        // calculée) — ce n'est un vrai oubli que pour une colonne de
+        // données classique, jamais typée par son auteur.
+        if (isGeneric && !c.isFormula) field.isGeneric = true;
         if (ref) {
           field.ref = ref;
           const displayCol = c.visibleCol ? columnsById.get(c.visibleCol) : null;
@@ -66,7 +71,14 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
             }
           }
         }
-        if (c.isFormula && c.formula) field.formula = c.formula;
+        if (c.isFormula) {
+          if (c.formula) field.formula = c.formula;
+          // isFormula vrai sans texte de formule : c'est l'état "Colonne
+          // vide" de Grist (colonne ajoutée, jamais tranchée entre donnée et
+          // formule) — pas une "colonne formule" au sens de Grist tant
+          // qu'aucun code n'y a été écrit (voir tableau de bord santé).
+          else field.isEmptyColumn = true;
+        }
         if (c.description) field.description = c.description;
         return field;
       });
