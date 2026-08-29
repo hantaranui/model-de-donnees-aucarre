@@ -25,12 +25,12 @@ describe("computeModelHealth", () => {
     expect(computeModelHealth(tables).brokenRefFields).toEqual([{ table: "A", field: "Ref" }]);
   });
 
-  it("liste les références sans colonne affichée configurée", () => {
+  it("liste les références qui affichent l'identifiant de ligne brut (displayColumn non résolu)", () => {
     const tables = [
       { id: "A", fields: [{ name: "Ref", type: "ref", ref: "B" }] },
       { id: "B", fields: [] }
     ];
-    expect(computeModelHealth(tables).missingDisplayColumnFields).toEqual([{ table: "A", field: "Ref" }]);
+    expect(computeModelHealth(tables).rowIdDisplayFields).toEqual([{ table: "A", field: "Ref" }]);
   });
 
   it("n'ajoute pas une référence à la liste quand displayColumn est résolu", () => {
@@ -38,12 +38,12 @@ describe("computeModelHealth", () => {
       { id: "A", fields: [{ name: "Ref", type: "ref", ref: "B", displayColumn: "Nom" }] },
       { id: "B", fields: [] }
     ];
-    expect(computeModelHealth(tables).missingDisplayColumnFields).toEqual([]);
+    expect(computeModelHealth(tables).rowIdDisplayFields).toEqual([]);
   });
 
-  it("n'ajoute pas un champ non-référence à la liste des colonnes affichées manquantes", () => {
+  it("n'ajoute pas un champ non-référence à la liste des identifiants de ligne bruts", () => {
     const tables = [{ id: "A", fields: [{ name: "Nom", type: "text" }] }];
-    expect(computeModelHealth(tables).missingDisplayColumnFields).toEqual([]);
+    expect(computeModelHealth(tables).rowIdDisplayFields).toEqual([]);
   });
 
   it("liste les colonnes encore à l'état 'Colonne vide' (isEmptyColumn)", () => {
@@ -82,7 +82,7 @@ describe("computeModelHealth", () => {
     const health = computeModelHealth(tables);
     expect(health.genericFields).toEqual([]);
     expect(health.brokenRefFields).toEqual([]);
-    expect(health.missingDisplayColumnFields).toEqual([]);
+    expect(health.rowIdDisplayFields).toEqual([]);
     expect(health.emptyColumnFields).toEqual([]);
     expect(health.untouchedTables).toEqual([]);
   });

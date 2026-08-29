@@ -24,7 +24,7 @@ export function isUntouchedTable(table) {
 export function computeModelHealth(tables) {
   const genericFields = [];
   const brokenRefFields = [];
-  const missingDisplayColumnFields = [];
+  const rowIdDisplayFields = [];
   const emptyColumnFields = [];
   const untouchedTables = [];
 
@@ -32,11 +32,15 @@ export function computeModelHealth(tables) {
     t.fields.forEach((f) => {
       if (f.isGeneric) genericFields.push({ table: t.id, field: f.name });
       if (f.brokenRef) brokenRefFields.push({ table: t.id, field: f.name });
-      if (f.ref && !f.displayColumn) missingDisplayColumnFields.push({ table: t.id, field: f.name });
+      // displayColumn non résolu (visibleCol jamais choisi) : Grist retombe
+      // sur l'affichage de l'identifiant de ligne brut ("Montrer la colonne :
+      // Id de ligne" dans le panneau Grist — un état bel et bien configuré,
+      // pas un oubli), illisible pour un humain (ex. "Agences[321]").
+      if (f.ref && !f.displayColumn) rowIdDisplayFields.push({ table: t.id, field: f.name });
       if (f.isEmptyColumn) emptyColumnFields.push({ table: t.id, field: f.name });
     });
     if (isUntouchedTable(t)) untouchedTables.push(t.id);
   });
 
-  return { genericFields, brokenRefFields, missingDisplayColumnFields, emptyColumnFields, untouchedTables };
+  return { genericFields, brokenRefFields, rowIdDisplayFields, emptyColumnFields, untouchedTables };
 }

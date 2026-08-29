@@ -69,9 +69,13 @@ export function renderHealthPanel(bodyEl, health, onJump) {
 
   renderIndicator(
     bodyEl,
-    health.missingDisplayColumnFields.length,
-    `référence${plural(health.missingDisplayColumnFields.length)} sans colonne affichée choisie`,
-    health.missingDisplayColumnFields,
+    health.rowIdDisplayFields.length,
+    // "Montrer la colonne : Id de ligne" dans Grist : la référence affiche un
+    // identifiant numérique brut (ex. "Agences[321]") plutôt qu'un champ
+    // représentatif — c'est un réglage bel et bien présent dans Grist, pas
+    // une case vide, d'où ce libellé qui décrit l'effet plutôt qu'un oubli.
+    `référence${plural(health.rowIdDisplayFields.length)} affichant l'identifiant de ligne brut`,
+    health.rowIdDisplayFields,
     onJump
   );
 
