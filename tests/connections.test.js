@@ -170,6 +170,16 @@ describe("connectedTables", () => {
   });
 });
 
+describe("buildConnections — références cassées", () => {
+  it("ne crée pas de liaison pour un champ marqué brokenRef", () => {
+    const tables = [
+      { id: "A", fields: [{ name: "X", type: "ref", ref: "Inexistante", brokenRef: true }] }
+    ];
+    const connections = buildConnections(tables);
+    expect(connections).toHaveLength(0);
+  });
+});
+
 describe("orphanTableIds", () => {
   it("ne retient que les tables sans aucune liaison entrante ni sortante", () => {
     const tables = [...TABLES, { id: "Isolee", fields: [{ name: "Note", type: "text" }] }];

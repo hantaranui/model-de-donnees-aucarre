@@ -68,7 +68,9 @@ export function buildConnections(tables) {
   const raw = [];
   tables.forEach((t) => {
     t.fields.forEach((f, fieldIndex) => {
-      if (f.ref) {
+      // Une référence cassée (brokenRef, voir markBrokenReferences) ne vise
+      // aucune table réelle : il n'y a nulle part où tracer un fil.
+      if (f.ref && !f.brokenRef) {
         raw.push({
           key: `${t.id}.${f.name}`,
           from: t.id,
@@ -93,8 +95,9 @@ export function buildConnections(tables) {
     (targetGroups[c.to] = targetGroups[c.to] || []).push(c);
   });
   Object.entries(targetGroups).forEach(([targetId, group]) => {
-    const target = byId.get(targetId);
-    const height = target ? cardHeight(target) : HEADER_H;
+    // Toute liaison encore présente ici vise une table existante : les
+    // références cassées ont déjà été écartées plus haut.
+    const height = cardHeight(byId.get(targetId));
     group.forEach((c, i) => {
       c.targetOffset = computeTargetOffset(i, group.length, height);
     });

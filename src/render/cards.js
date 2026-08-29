@@ -4,13 +4,21 @@ import { escapeHtml } from "../escapeHtml.js";
 
 export function fieldRowHTML(tableId, field, idx) {
   const isRef = field.type === "ref" || field.type === "reflist";
+  const classes = ["field-row"];
+  if (isRef) classes.push("is-ref");
+  if (field.brokenRef) classes.push("is-broken-ref");
   const safeName = escapeHtml(field.name);
   const safeRef = escapeHtml(field.ref);
-  return `<div class="field-row ${isRef ? "is-ref" : ""}" data-table="${escapeHtml(tableId)}" data-field="${safeName}" data-idx="${idx}">
+  const refHTML = field.brokenRef
+    ? `<span class="fref-broken" title="Référence cassée : la table « ${safeRef} » n'existe plus">⚠ ${safeRef}</span>`
+    : isRef
+      ? `<span class="fref-target" data-jump="${safeRef}">→ ${safeRef}</span>`
+      : "";
+  return `<div class="${classes.join(" ")}" data-table="${escapeHtml(tableId)}" data-field="${safeName}" data-idx="${idx}">
       ${icon(field.type)}
       <span class="fname${field.description ? " has-desc" : ""}">${safeName}</span>
       ${field.formula ? '<span class="ftag">ƒx</span>' : ""}
-      ${isRef ? `<span class="fref-target" data-jump="${safeRef}">→ ${safeRef}</span>` : ""}
+      ${refHTML}
     </div>`;
 }
 

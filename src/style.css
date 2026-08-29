@@ -17,6 +17,7 @@
   --tooltip-accent: #44F8CC;
   --tooltip-focus-accent: #FF9470;
   --tooltip-yellow-accent: #F4E04D;
+  --tooltip-notice-accent: #FFB454;
   --formula: #D9603A;
   --formula-soft: #FDEAE3;
   /* Couleur dédiée aux signalements (table isolée, référence cassée...) :
@@ -53,6 +54,7 @@
     --tooltip-accent: #0FAE93;
     --tooltip-focus-accent: #F77245;
     --tooltip-yellow-accent: #7A6300;
+    --tooltip-notice-accent: #8A5A00;
     --formula: #FF9470;
     --formula-soft: rgba(247, 114, 69, 0.16);
     --notice: #F4C24D;
@@ -83,6 +85,7 @@
   --tooltip-accent: #0FAE93;
   --tooltip-focus-accent: #F77245;
   --tooltip-yellow-accent: #7A6300;
+  --tooltip-notice-accent: #8A5A00;
   --formula: #FF9470;
   --formula-soft: rgba(247, 114, 69, 0.16);
   --notice: #F4C24D;
@@ -515,6 +518,18 @@ html, body {
   cursor: pointer;
 }
 .field-row.is-ref:hover { background: var(--accent-soft); }
+.field-row .fref-broken {
+  font-size: 10px;
+  color: var(--notice);
+  font-weight: 600;
+  flex: none;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+.field-row.is-broken-ref:hover { background: var(--notice-soft); }
 
 /* ---------- Legend ---------- */
 .legend {
@@ -700,6 +715,12 @@ html, body {
   opacity: 0.85;
   white-space: pre-wrap;
   word-break: break-word;
+}
+.tooltip .t-broken {
+  color: var(--tooltip-notice-accent);
+  font-weight: 600;
+  font-size: 10px;
+  margin-top: 2px;
 }
 
 /* ---------- Chargement / erreur ---------- */

@@ -82,6 +82,16 @@ describe("tooltipContent", () => {
     expect(content.extraHTML).not.toContain("<img");
     expect(content.extraHTML).toContain("&lt;img");
   });
+
+  it("référence cassée : signale l'absence de la table cible", () => {
+    const content = tooltipContent({ name: "X", type: "ref", ref: "Inexistante", brokenRef: true });
+    expect(content.extraHTML).toContain("t-broken");
+  });
+
+  it("référence valide : pas de mention de référence cassée", () => {
+    const content = tooltipContent({ name: "X", type: "ref", ref: "Abonnement" });
+    expect(content.extraHTML).not.toContain("t-broken");
+  });
 });
 
 describe("tableTooltipContent", () => {

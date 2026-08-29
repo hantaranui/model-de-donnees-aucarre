@@ -1,5 +1,6 @@
 import { TABLES, tableById } from "./data/tables.js";
 import { buildConnections, orphanTableIds } from "./data/connections.js";
+import { markBrokenReferences } from "./data/referenceIntegrity.js";
 import { createState, resetPositions } from "./state.js";
 import { renderLegend, bindLegendToggle } from "./render/legend.js";
 import { renderSidebar, applySidebarSearch } from "./render/sidebar.js";
@@ -12,7 +13,8 @@ import { CARD_W } from "./constants.js";
 import { cardHeight } from "./layout.js";
 import { clampZoom, computeFitZoom, tablesBounds, ZOOM_STEP } from "./zoom.js";
 
-export function initApp(dom, tables = TABLES) {
+export function initApp(dom, rawTables = TABLES) {
+  const tables = markBrokenReferences(rawTables);
   const connections = buildConnections(tables);
   const orphanIds = orphanTableIds(tables, connections);
   const state = createState(tables);

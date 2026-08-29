@@ -10,6 +10,9 @@ export function tooltipContent(field, tableName) {
   }
   if (field.ref) {
     extraHTML += `<div class="t-label" style="margin-top:6px;">Cible</div><div class="mono">${escapeHtml(field.ref)}</div>`;
+    if (field.brokenRef) {
+      extraHTML += `<div class="t-broken">⚠ Cette table n'existe plus dans le document</div>`;
+    }
     if (field.displayColumn) {
       extraHTML += `<div class="t-display-col">${escapeHtml(field.displayColumn)}</div>`;
     }

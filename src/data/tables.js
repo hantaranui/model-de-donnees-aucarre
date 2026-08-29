@@ -46,7 +46,11 @@ export const TABLES = [
       { name: "NomCompte", type: "text" },
       { name: "NbAuxiliaires", type: "int" },
       { name: "DateDebut", type: "date" },
-      { name: "DateExpiration", type: "date", formula: "rec.DateDebut + 365" }
+      { name: "DateExpiration", type: "date", formula: "rec.DateDebut + 365" },
+      // Référence cassée : la table visée n'existe plus (colonne oubliée
+      // après une suppression). Exemple de démo pour la détection dédiée
+      // (brokenRef est calculé automatiquement par markBrokenReferences).
+      { name: "AncienneOffre", type: "ref", ref: "Offres_Archivees" }
     ]
   },
   {
