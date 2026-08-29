@@ -11,7 +11,7 @@ export function groupTables(tables) {
   return groups;
 }
 
-export function renderSidebar(sidebarEl, tables, focusedId, onSelect) {
+export function renderSidebar(sidebarEl, tables, focusedId, onSelect, orphanIds = new Set()) {
   sidebarEl.innerHTML = "";
   groupTables(tables).forEach((groupTables_, groupName) => {
     const wrap = document.createElement("div");
@@ -22,7 +22,10 @@ export function renderSidebar(sidebarEl, tables, focusedId, onSelect) {
       row.className = "sidebar-row";
       if (t.id === focusedId) row.classList.add("is-focused");
       row.dataset.table = t.id;
-      row.innerHTML = `<span class="name">${escapeHtml(t.id)}</span><span class="count">${t.fields.length}</span>`;
+      const orphanMark = orphanIds.has(t.id)
+        ? '<span class="orphan-dot" title="Aucune liaison entrante ni sortante">●</span>'
+        : "";
+      row.innerHTML = `<span class="name">${escapeHtml(t.id)}</span>${orphanMark}<span class="count">${t.fields.length}</span>`;
       row.addEventListener("click", () => onSelect(t.id));
       wrap.appendChild(row);
     });

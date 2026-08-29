@@ -1,5 +1,5 @@
 import { TABLES, tableById } from "./data/tables.js";
-import { buildConnections } from "./data/connections.js";
+import { buildConnections, orphanTableIds } from "./data/connections.js";
 import { createState, resetPositions } from "./state.js";
 import { renderLegend, bindLegendToggle } from "./render/legend.js";
 import { renderSidebar, applySidebarSearch } from "./render/sidebar.js";
@@ -14,6 +14,7 @@ import { clampZoom, computeFitZoom, tablesBounds, ZOOM_STEP } from "./zoom.js";
 
 export function initApp(dom, tables = TABLES) {
   const connections = buildConnections(tables);
+  const orphanIds = orphanTableIds(tables, connections);
   const state = createState(tables);
 
   dom.statTables.textContent = String(tables.length);
@@ -59,8 +60,8 @@ export function initApp(dom, tables = TABLES) {
   }
 
   function renderAll() {
-    renderSidebar(dom.sidebar, tables, state.focused, (id) => setFocus(state.focused === id ? null : id));
-    renderCards(dom.canvasContent, tables, state.positions);
+    renderSidebar(dom.sidebar, tables, state.focused, (id) => setFocus(state.focused === id ? null : id), orphanIds);
+    renderCards(dom.canvasContent, tables, state.positions, orphanIds);
     attachCardBehaviors(dom.canvasContent, state.positions, {
       onCardMoved: () => {
         renderWires(dom.wires, connections, state.positions);
@@ -113,7 +114,13 @@ export function initApp(dom, tables = TABLES) {
     }
     applyFocusStyles(dom.canvasContent, connections, state.focused);
     updateWireVisibility(dom.wires, connections, state);
-    renderSidebar(dom.sidebar, tables, state.focused, (rowId) => setFocus(state.focused === rowId ? null : rowId));
+    renderSidebar(
+      dom.sidebar,
+      tables,
+      state.focused,
+      (rowId) => setFocus(state.focused === rowId ? null : rowId),
+      orphanIds
+    );
   }
 
   dom.search.addEventListener("input", (e) => {

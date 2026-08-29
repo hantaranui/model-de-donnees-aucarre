@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildConnections, connectedTables, computeTargetOffset } from "../src/data/connections.js";
+import { buildConnections, connectedTables, computeTargetOffset, orphanTableIds } from "../src/data/connections.js";
 import { HEADER_H, ROW_H } from "../src/constants.js";
 
 const TABLES = [
@@ -167,5 +167,27 @@ describe("connectedTables", () => {
   it("retourne un set vide pour une table sans liaison", () => {
     const connections = buildConnections(TABLES);
     expect(connectedTables(connections, "Inconnue").size).toBe(0);
+  });
+});
+
+describe("orphanTableIds", () => {
+  it("ne retient que les tables sans aucune liaison entrante ni sortante", () => {
+    const tables = [...TABLES, { id: "Isolee", fields: [{ name: "Note", type: "text" }] }];
+    const connections = buildConnections(tables);
+    expect(orphanTableIds(tables, connections)).toEqual(new Set(["Isolee"]));
+  });
+
+  it("renvoie un set vide quand toutes les tables sont liées", () => {
+    const connections = buildConnections(TABLES);
+    expect(orphanTableIds(TABLES, connections).size).toBe(0);
+  });
+
+  it("une table cible d'une référence n'est pas orpheline", () => {
+    const tables = [
+      { id: "A", fields: [{ name: "Ref", type: "ref", ref: "B" }] },
+      { id: "B", fields: [{ name: "Nom", type: "text" }] }
+    ];
+    const connections = buildConnections(tables);
+    expect(orphanTableIds(tables, connections)).toEqual(new Set());
   });
 });

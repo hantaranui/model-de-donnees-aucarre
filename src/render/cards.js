@@ -14,12 +14,13 @@ export function fieldRowHTML(tableId, field, idx) {
     </div>`;
 }
 
-function cardHTML(table) {
+function cardHTML(table, isOrphan) {
   const safeId = escapeHtml(table.id);
   return `
     <div class="card-header">
       <span class="dot"></span>
       <span class="tname${table.description ? " has-desc" : ""}">${safeId}</span>
+      ${isOrphan ? '<span class="otag" title="Aucune liaison entrante ni sortante">Isolée</span>' : ""}
       <span class="fcount">${table.fields.length}</span>
     </div>
     <div class="card-body">
@@ -27,7 +28,7 @@ function cardHTML(table) {
     </div>`;
 }
 
-export function renderCards(canvasContent, tables, positions) {
+export function renderCards(canvasContent, tables, positions, orphanIds = new Set()) {
   canvasContent.querySelectorAll(".table-card").forEach((el) => el.remove());
   tables.forEach((t) => {
     const pos = positions[t.id];
@@ -37,7 +38,7 @@ export function renderCards(canvasContent, tables, positions) {
     card.style.left = `${pos.x}px`;
     card.style.top = `${pos.y}px`;
     card.style.setProperty("--group-color", GROUP_COLORS[t.group] || "#59736E");
-    card.innerHTML = cardHTML(t);
+    card.innerHTML = cardHTML(t, orphanIds.has(t.id));
     canvasContent.appendChild(card);
   });
 }

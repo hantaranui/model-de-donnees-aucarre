@@ -26,6 +26,20 @@ describe("renderSidebar", () => {
     expect(el.querySelector("img")).toBeNull();
     expect(el.textContent).toContain("<img");
   });
+
+  it("marque une table isolée avec un indicateur dédié", () => {
+    const el = document.createElement("div");
+    const tables = [{ id: "Isolee", group: "Tables", fields: [] }];
+    renderSidebar(el, tables, null, () => {}, new Set(["Isolee"]));
+    expect(el.querySelector(".sidebar-row .orphan-dot")).not.toBeNull();
+  });
+
+  it("n'ajoute pas d'indicateur pour une table liée", () => {
+    const el = document.createElement("div");
+    const tables = [{ id: "Liee", group: "Tables", fields: [] }];
+    renderSidebar(el, tables, null, () => {}, new Set());
+    expect(el.querySelector(".sidebar-row .orphan-dot")).toBeNull();
+  });
 });
 
 describe("applySidebarSearch", () => {

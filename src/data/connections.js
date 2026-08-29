@@ -111,3 +111,14 @@ export function connectedTables(connections, id) {
   });
   return set;
 }
+
+// Tables sans aucune liaison, ni comme source ni comme cible : ni référencée
+// par une autre table, ni ne référençant elle-même une autre table.
+export function orphanTableIds(tables, connections) {
+  const linked = new Set();
+  connections.forEach((c) => {
+    linked.add(c.from);
+    linked.add(c.to);
+  });
+  return new Set(tables.filter((t) => !linked.has(t.id)).map((t) => t.id));
+}

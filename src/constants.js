@@ -16,7 +16,8 @@ export const TYPE_LABELS = {
 export const GROUP_COLORS = {
   Comptes: "#F77245",
   Contenu: "#0FAE93",
-  Modules: "#59736E"
+  Modules: "#59736E",
+  Système: "#8676D9"
 };
 
 export const CARD_W = 232;

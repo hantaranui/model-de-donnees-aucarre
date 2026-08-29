@@ -126,6 +126,18 @@ export const TABLES = [
       { name: "Quiz", type: "choice" },
       { name: "BonneRep", type: "text" }
     ]
+  },
+  {
+    id: "Parametres",
+    group: "Système",
+    x: 1430,
+    y: 1120,
+    description: "Réglages globaux de la plateforme (une seule ligne en pratique). Table volontairement isolée.",
+    fields: [
+      { name: "NomPlateforme", type: "text" },
+      { name: "ContactSupport", type: "text" },
+      { name: "MaintenanceActive", type: "bool" }
+    ]
   }
 ];
 
