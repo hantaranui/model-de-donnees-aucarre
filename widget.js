@@ -847,6 +847,7 @@
       });
       return { id: t.tableId, group: "Tables", fields };
     });
+    tables.sort((a, b) => a.id.localeCompare(b.id, "fr", { numeric: true, sensitivity: "base" }));
     const positions = computeGridLayout(tables);
     tables.forEach((t) => {
       t.x = positions[t.id].x;

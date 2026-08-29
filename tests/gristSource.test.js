@@ -42,7 +42,24 @@ describe("buildTablesFromGristMetadata", () => {
 
   it("exclut les tables de synthèse (summarySourceTable) et les tables internes _grist_*", () => {
     const tables = buildTablesFromGristMetadata(tableRows, columnRows);
-    expect(tables.map((t) => t.id)).toEqual(["Utilisateurs", "Formations"]);
+    expect(tables.map((t) => t.id).sort()).toEqual(["Formations", "Utilisateurs"]);
+  });
+
+  it("trie les tables par ordre alphabétique plutôt que par ordre de création", () => {
+    // _grist_Tables renvoie les tables dans leur ordre de création (ici
+    // Utilisateurs avant Formations) : ce n'est ni visible ni modifiable
+    // depuis Grist, donc on impose un ordre prévisible.
+    const tables = buildTablesFromGristMetadata(tableRows, columnRows);
+    expect(tables.map((t) => t.id)).toEqual(["Formations", "Utilisateurs"]);
+  });
+
+  it("trie naturellement les suffixes numériques (T2 avant T10)", () => {
+    const rows = [
+      { id: 1, tableId: "T10_Suivi", summarySourceTable: 0 },
+      { id: 2, tableId: "T2_Suivi", summarySourceTable: 0 }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, []);
+    expect(tables.map((t) => t.id)).toEqual(["T2_Suivi", "T10_Suivi"]);
   });
 
   it("trie les champs par parentPos et exclut les colonnes techniques", () => {

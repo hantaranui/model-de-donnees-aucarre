@@ -48,6 +48,11 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
     return { id: t.tableId, group: "Tables", fields };
   });
 
+  // _grist_Tables renvoie les tables dans leur ordre de création dans le
+  // document — invisible et non modifiable depuis Grist. L'ordre alphabétique
+  // est prévisible d'une ouverture à l'autre, indépendamment de cet historique.
+  tables.sort((a, b) => a.id.localeCompare(b.id, "fr", { numeric: true, sensitivity: "base" }));
+
   const positions = computeGridLayout(tables);
   tables.forEach((t) => {
     t.x = positions[t.id].x;
