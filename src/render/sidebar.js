@@ -1,4 +1,5 @@
 import { escapeHtml } from "../escapeHtml.js";
+import { tableSearchResult } from "../search.js";
 
 // Regroupe les tables par groupe métier, dans l'ordre de première apparition.
 export function groupTables(tables) {
@@ -29,10 +30,14 @@ export function renderSidebar(sidebarEl, tables, focusedId, onSelect) {
   });
 }
 
-export function applySidebarSearch(sidebarEl, query) {
-  const q = query.trim().toLowerCase();
+// Estompe une table dans la sidebar seulement si ni elle ni aucun de ses
+// champs ne correspond à la recherche (même critère que sur le canvas :
+// nom, formule ou description — voir tableSearchResult).
+export function applySidebarSearch(sidebarEl, tables, query) {
+  const byId = new Map(tables.map((t) => [t.id, t]));
   sidebarEl.querySelectorAll(".sidebar-row").forEach((row) => {
-    const match = q.length === 0 || row.dataset.table.toLowerCase().includes(q);
-    row.classList.toggle("is-dim", !match);
+    const table = byId.get(row.dataset.table);
+    const { dim } = tableSearchResult(table, query);
+    row.classList.toggle("is-dim", dim);
   });
 }

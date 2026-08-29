@@ -119,7 +119,7 @@ export function initApp(dom, tables = TABLES) {
   dom.search.addEventListener("input", (e) => {
     state.search = e.target.value;
     applySearchToCards(dom.canvasContent, tables, state.search);
-    applySidebarSearch(dom.sidebar, state.search);
+    applySidebarSearch(dom.sidebar, tables, state.search);
   });
 
   dom.modeFocusBtn.addEventListener("click", () => {

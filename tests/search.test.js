@@ -34,4 +34,35 @@ describe("tableSearchResult", () => {
     const result = tableSearchResult(table, "TITRE");
     expect(result.matchedFields).toEqual(new Set(["Titre"]));
   });
+
+  it("match sur une formule : le champ est retenu même si son nom ne correspond pas", () => {
+    const withFormula = {
+      id: "Abonnement",
+      fields: [{ name: "JoursRestants", type: "int", formula: "rec.DateExpiration - TODAY()" }]
+    };
+    const result = tableSearchResult(withFormula, "today");
+    expect(result.matchedFields).toEqual(new Set(["JoursRestants"]));
+    expect(result.dim).toBe(false);
+  });
+
+  it("match sur une description de champ : le champ est retenu", () => {
+    const withDescription = {
+      id: "Utilisateurs",
+      fields: [{ name: "Abonnement", type: "ref", description: "L'abonnement individuel de l'utilisateur." }]
+    };
+    const result = tableSearchResult(withDescription, "individuel");
+    expect(result.matchedFields).toEqual(new Set(["Abonnement"]));
+  });
+
+  it("match sur une description de table : la table n'est pas estompée sans champ correspondant", () => {
+    const withDescription = {
+      id: "Utilisateurs",
+      description: "Un compte apprenant créé via le SSO du client.",
+      fields: [{ name: "Nom", type: "text" }]
+    };
+    const result = tableSearchResult(withDescription, "sso");
+    expect(result.tableMatch).toBe(true);
+    expect(result.matchedFields).toEqual(new Set());
+    expect(result.dim).toBe(false);
+  });
 });
