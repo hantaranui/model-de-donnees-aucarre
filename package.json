@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "esbuild src/main.js --bundle --format=iife --outfile=widget.js --sourcemap --watch --servedir=. --serve=5173",
+    "dev": "esbuild src/main.js --bundle --format=iife --outfile=widget.js --sourcemap --watch=forever --servedir=. --serve=5173",
     "build": "esbuild src/main.js --bundle --format=iife --outfile=widget.js",
     "test": "vitest run",
     "test:watch": "vitest"
