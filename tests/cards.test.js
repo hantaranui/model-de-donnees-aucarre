@@ -31,4 +31,14 @@ describe("fieldRowHTML", () => {
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
   });
+
+  it("champ avec description : porte la classe has-desc", () => {
+    const html = fieldRowHTML("Formations", { name: "Titre", type: "text", description: "Le titre affiché." }, 0);
+    expect(html).toContain("has-desc");
+  });
+
+  it("champ sans description : pas de classe has-desc", () => {
+    const html = fieldRowHTML("Formations", { name: "Titre", type: "text" }, 0);
+    expect(html).not.toContain("has-desc");
+  });
 });

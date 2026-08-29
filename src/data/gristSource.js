@@ -52,10 +52,13 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
           if (displayCol) field.displayColumn = displayCol.label || displayCol.colId;
         }
         if (c.isFormula && c.formula) field.formula = c.formula;
+        if (c.description) field.description = c.description;
         return field;
       });
 
-    return { id: t.tableId, group: "Tables", fields };
+    const table = { id: t.tableId, group: "Tables", fields };
+    if (t.description) table.description = t.description;
+    return table;
   });
 
   // _grist_Tables renvoie les tables dans leur ordre de création dans le

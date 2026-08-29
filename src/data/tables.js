@@ -7,11 +7,18 @@ export const TABLES = [
     group: "Comptes",
     x: 320,
     y: 580,
+    description: "Un compte apprenant. Créé automatiquement à la première connexion via le SSO du client.",
     fields: [
       { name: "Nom", type: "text" },
       { name: "Email", type: "text" },
       { name: "DateInscription", type: "date" },
-      { name: "Abonnement", type: "ref", ref: "Abonnement", displayColumn: "Statut" },
+      {
+        name: "Abonnement",
+        type: "ref",
+        ref: "Abonnement",
+        displayColumn: "Statut",
+        description: "L'abonnement individuel de l'utilisateur, distinct de celui de son grand compte le cas échéant."
+      },
       { name: "GrandCompte", type: "ref", ref: "Auxiliaires_GrandCompte" },
       { name: "FormationsSuivies", type: "reflist", ref: "Formations" }
     ]

@@ -112,6 +112,43 @@ describe("buildTablesFromGristMetadata", () => {
     expect(formations.fields.find((f) => f.name === "JoursRestants").formula).toBe("rec.Date - TODAY()");
   });
 
+  it("reprend la description d'une table quand _grist_Tables en fournit une", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0, description: "Une table de test." }];
+    const tables = buildTablesFromGristMetadata(rows, []);
+    expect(tables[0].description).toBe("Une table de test.");
+  });
+
+  it("n'ajoute pas de description de table quand elle est vide", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0, description: "" }];
+    const tables = buildTablesFromGristMetadata(rows, []);
+    expect(tables[0].description).toBeUndefined();
+  });
+
+  it("reprend la description d'une colonne quand _grist_Tables_column en fournit une", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0 }];
+    const cols = [
+      {
+        id: 10,
+        parentId: 1,
+        parentPos: 1,
+        colId: "Nom",
+        type: "Text",
+        label: "Nom",
+        isFormula: false,
+        formula: "",
+        description: "Le nom complet."
+      }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, cols);
+    expect(tables[0].fields[0].description).toBe("Le nom complet.");
+  });
+
+  it("n'ajoute pas de description de colonne quand elle est absente", () => {
+    const tables = buildTablesFromGristMetadata(tableRows, columnRows);
+    const utilisateurs = tables.find((t) => t.id === "Utilisateurs");
+    expect(utilisateurs.fields.find((f) => f.name === "Nom").description).toBeUndefined();
+  });
+
   it("assigne à chaque table une position calculée", () => {
     const tables = buildTablesFromGristMetadata(tableRows, columnRows);
     tables.forEach((t) => {

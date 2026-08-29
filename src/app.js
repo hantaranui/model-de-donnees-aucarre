@@ -83,7 +83,10 @@ export function initApp(dom, tables = TABLES) {
         state.hoveredConn = null;
         updateWireVisibility(dom.wires, connections, state);
       },
-      onRefJump: (targetId) => jumpTo(targetId)
+      onRefJump: (targetId) => jumpTo(targetId),
+      onTableHover: (tableId) => tooltip.showTable(tableById(tables, tableId)),
+      onTableMove: (event) => tooltip.move(event),
+      onTableLeave: () => tooltip.hide()
     }, () => state.zoom);
     renderWires(dom.wires, connections, state.positions);
     updateWireVisibility(dom.wires, connections, state);

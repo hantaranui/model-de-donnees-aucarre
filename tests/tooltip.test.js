@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tooltipContent, tooltipPosition } from "../src/render/tooltip.js";
+import { tooltipContent, tableTooltipContent, tooltipPosition } from "../src/render/tooltip.js";
 
 describe("tooltipContent", () => {
   it("champ simple : pas de bloc supplémentaire", () => {
@@ -63,6 +63,41 @@ describe("tooltipContent", () => {
 
   it("échappe une table cible malveillante", () => {
     const content = tooltipContent({ name: "X", type: "ref", ref: `"><script>alert(1)</script>` });
+    expect(content.extraHTML).not.toContain("<script>");
+    expect(content.extraHTML).toContain("&lt;script&gt;");
+  });
+
+  it("champ avec description : l'affiche dans le bloc supplémentaire", () => {
+    const content = tooltipContent({ name: "Email", type: "text", description: "L'adresse de contact." });
+    expect(content.extraHTML).toContain("L&#39;adresse de contact.");
+  });
+
+  it("champ sans description : pas de bloc t-description", () => {
+    const content = tooltipContent({ name: "Email", type: "text" });
+    expect(content.extraHTML).not.toContain("t-description");
+  });
+
+  it("échappe une description de champ malveillante", () => {
+    const content = tooltipContent({ name: "X", type: "text", description: `<img src=x onerror=alert(1)>` });
+    expect(content.extraHTML).not.toContain("<img");
+    expect(content.extraHTML).toContain("&lt;img");
+  });
+});
+
+describe("tableTooltipContent", () => {
+  it("table sans description : pas de bloc supplémentaire", () => {
+    const content = tableTooltipContent({ id: "Utilisateurs", fields: [] });
+    expect(content).toEqual({ tableName: "", name: "Utilisateurs", typeLabel: "", extraHTML: "" });
+  });
+
+  it("table avec description : l'affiche dans le bloc supplémentaire", () => {
+    const content = tableTooltipContent({ id: "Utilisateurs", description: "Un compte apprenant.", fields: [] });
+    expect(content.extraHTML).toContain("t-description");
+    expect(content.extraHTML).toContain("Un compte apprenant.");
+  });
+
+  it("échappe une description de table malveillante", () => {
+    const content = tableTooltipContent({ id: "X", description: `<script>alert(1)</script>`, fields: [] });
     expect(content.extraHTML).not.toContain("<script>");
     expect(content.extraHTML).toContain("&lt;script&gt;");
   });

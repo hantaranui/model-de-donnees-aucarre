@@ -8,7 +8,7 @@ export function fieldRowHTML(tableId, field, idx) {
   const safeRef = escapeHtml(field.ref);
   return `<div class="field-row ${isRef ? "is-ref" : ""}" data-table="${escapeHtml(tableId)}" data-field="${safeName}" data-idx="${idx}">
       ${icon(field.type)}
-      <span class="fname">${safeName}</span>
+      <span class="fname${field.description ? " has-desc" : ""}">${safeName}</span>
       ${field.formula ? '<span class="ftag">ƒx</span>' : ""}
       ${isRef ? `<span class="fref-target" data-jump="${safeRef}">→ ${safeRef}</span>` : ""}
     </div>`;
@@ -19,7 +19,7 @@ function cardHTML(table) {
   return `
     <div class="card-header">
       <span class="dot"></span>
-      <span class="tname">${safeId}</span>
+      <span class="tname${table.description ? " has-desc" : ""}">${safeId}</span>
       <span class="fcount">${table.fields.length}</span>
     </div>
     <div class="card-body">
@@ -44,7 +44,8 @@ export function renderCards(canvasContent, tables, positions) {
 
 // callbacks: { onCardMoved(tableId), onCardToggled(tableId), onFieldHover(row, event),
 //              onFieldMove(event), onFieldLeave(), onRefEnter(row), onRefLeave(),
-//              onRefJump(targetTableId) }
+//              onRefJump(targetTableId), onTableHover(tableId, event), onTableMove(event),
+//              onTableLeave() }
 // getZoom: () => number courant du zoom, pour convertir un déplacement de
 // souris (pixels écran) en déplacement dans l'espace non zoomé du canvas.
 export function attachCardBehaviors(canvasContent, positions, callbacks, getZoom = () => 1) {
@@ -65,6 +66,10 @@ export function attachCardBehaviors(canvasContent, positions, callbacks, getZoom
       card.classList.add("is-dragging");
       e.preventDefault();
     });
+
+    header.addEventListener("mouseenter", () => callbacks.onTableHover(card.dataset.id));
+    header.addEventListener("mousemove", (e) => callbacks.onTableMove(e));
+    header.addEventListener("mouseleave", () => callbacks.onTableLeave());
 
     window.addEventListener("mousemove", (e) => {
       if (!dragging) return;

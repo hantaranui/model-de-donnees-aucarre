@@ -428,6 +428,10 @@ html, body {
   white-space: nowrap;
   flex: 1;
 }
+.card-header .tname.has-desc {
+  text-decoration: underline dotted var(--text-faint);
+  text-underline-offset: 3px;
+}
 .card-header .fcount {
   font-size: 10px;
   color: var(--text-faint);
@@ -459,6 +463,10 @@ html, body {
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+}
+.field-row .fname.has-desc {
+  text-decoration: underline dotted var(--text-faint);
+  text-underline-offset: 2px;
 }
 .field-row .ftag {
   font-size: 9.5px;
@@ -662,6 +670,11 @@ html, body {
   letter-spacing: 0.06em;
   opacity: 0.6;
   margin-bottom: 2px;
+}
+.tooltip .t-description {
+  opacity: 0.85;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* ---------- Chargement / erreur ---------- */
