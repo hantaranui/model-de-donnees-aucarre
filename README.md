@@ -83,4 +83,4 @@ Les noms de tables/champs viennent du document Grist (texte libre modifiable par
 
 ## Crédits
 
-Développé par **au carré** — Hanta C., avec l'assistance de [Claude Code](https://claude.com/claude-code) (Anthropic).
+Développé par **[au carré](https://www.aucarre.tech/)** — Hanta C., avec l'assistance de [Claude Code](https://claude.com/claude-code) (Anthropic).
