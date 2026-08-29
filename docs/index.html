@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Modèle de données</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+  <script type="module" crossorigin src="./assets/index-DejNvFYY.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-nOOD5IEI.css">
+</head>
+<body>
+  <div class="loading-overlay" id="loading">
+    <div class="spinner"></div>
+    <span>Chargement du modèle de données…</span>
+  </div>
+
+  <div class="load-error" id="load-error">
+    <strong>Impossible de charger les données du document Grist.</strong>
+    <span id="load-error-message"></span>
+  </div>
+
+  <div class="app">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-logo">
+          <img src="./assets/logo-au-carre-Dh-MfJ3C.png" alt="au carré">
+        </div>
+        <h1><span class="title-highlight"></span><span class="title-text">Modèle de données</span></h1>
+      </div>
+      <div class="stat-chips">
+        <div class="stat-chip"><b id="stat-tables">0</b> tables</div>
+        <div class="stat-chip"><b id="stat-fields">0</b> champs</div>
+        <div class="stat-chip"><b id="stat-links">0</b> liaisons</div>
+      </div>
+      <div class="search-wrap">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="9" r="6"/><path d="m17 17-4-4"/></svg>
+        <input id="search" type="text" name="constellation-table-search" autocomplete="off" placeholder="Rechercher une table ou un champ…">
+      </div>
+      <div class="topbar-right">
+        <div class="mode-toggle">
+          <button id="mode-focus" class="active">Mode focus</button>
+          <button id="mode-all">Toutes les liaisons</button>
+        </div>
+        <button class="icon-btn" id="reset-layout">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10a6 6 0 1 1 1.8 4.3M4 10V6m0 4h4"/></svg>
+          Réinitialiser
+        </button>
+      </div>
+    </div>
+
+    <div class="body">
+      <div class="sidebar" id="sidebar"></div>
+
+      <div class="canvas-pane">
+        <div class="canvas-wrap" id="canvas-wrap">
+          <div class="canvas-content" id="canvas-content">
+            <svg class="wires" id="wires"></svg>
+            <!-- table cards injected here -->
+          </div>
+        </div>
+
+        <div class="focus-banner" id="focus-banner">
+          <span>Focus — <span class="mono" id="focus-name">Table</span></span>
+          <button id="focus-clear" title="Quitter le mode focus">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 5l10 10M15 5 5 15"/></svg>
+          </button>
+        </div>
+
+        <div class="legend is-collapsed" id="legend">
+          <div class="legend-head" id="legend-toggle">
+            <span>Légende</span>
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8l4 4 4-4"/></svg>
+          </div>
+          <div class="legend-body" id="legend-body"></div>
+        </div>
+
+        <div class="zoom-controls" id="zoom-controls">
+          <button class="zoom-btn" id="zoom-out" title="Zoom arrière" aria-label="Zoom arrière">−</button>
+          <button class="zoom-level" id="zoom-level" title="Réinitialiser le zoom">100%</button>
+          <button class="zoom-btn" id="zoom-in" title="Zoom avant" aria-label="Zoom avant">+</button>
+          <button class="zoom-fit" id="zoom-fit" title="Tout afficher">Ajuster</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip">
+    <div class="t-table" id="tt-table"></div>
+    <div class="t-name" id="tt-name"></div>
+    <div class="t-type" id="tt-type"></div>
+    <div id="tt-extra"></div>
+  </div>
+
+</body>
+</html>
