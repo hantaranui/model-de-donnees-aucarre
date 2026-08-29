@@ -29,7 +29,17 @@ Pour tester avec un vrai document Grist, ajoute un widget "URL personnalisée" p
 npm run build
 ```
 
-Produit un dossier `dist/` statique, à héberger n'importe où (l'URL de ce déploiement est celle à utiliser comme widget custom dans Grist, à la place de `localhost`).
+Produit un dossier `dist/` statique. Pour publier sur GitHub Pages :
+
+```bash
+npm run build
+rm -rf docs && cp -r dist docs
+git add docs && git commit -m "Rebuild docs/" && git push
+```
+
+`docs/` est commité dans le repo (contrairement à `dist/`, ignoré) : GitHub Pages le sert directement en mode "Deploy from a branch" (dossier `/docs`), sans étape de build côté GitHub. `index.html` reste à la racine pour `npm run dev` — c'est le fichier source, pas le build.
+
+L'URL GitHub Pages qui en résulte (`https://<compte>.github.io/<repo>/`) est celle à utiliser comme widget custom dans Grist.
 
 ### Tests
 
