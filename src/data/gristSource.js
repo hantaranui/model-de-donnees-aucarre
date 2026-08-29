@@ -1,5 +1,6 @@
 import { mapGristType } from "./gristTypeMapping.js";
 import { computeGridLayout } from "../layout.js";
+import { assignGroupsByPrefix } from "./tableGrouping.js";
 
 const HIDDEN_COL_IDS = new Set(["manualSort"]);
 
@@ -56,7 +57,7 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
         return field;
       });
 
-    const table = { id: t.tableId, group: "Tables", fields };
+    const table = { id: t.tableId, fields };
     if (t.description) table.description = t.description;
     return table;
   });
@@ -66,13 +67,15 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
   // est prévisible d'une ouverture à l'autre, indépendamment de cet historique.
   tables.sort((a, b) => a.id.localeCompare(b.id, "fr", { numeric: true, sensitivity: "base" }));
 
-  const positions = computeGridLayout(tables);
-  tables.forEach((t) => {
+  const groupedTables = assignGroupsByPrefix(tables);
+
+  const positions = computeGridLayout(groupedTables);
+  groupedTables.forEach((t) => {
     t.x = positions[t.id].x;
     t.y = positions[t.id].y;
   });
 
-  return tables;
+  return groupedTables;
 }
 
 // Point d'entrée réel : lit le document Grist courant via le plugin API.

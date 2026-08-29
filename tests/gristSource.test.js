@@ -149,6 +149,18 @@ describe("buildTablesFromGristMetadata", () => {
     expect(utilisateurs.fields.find((f) => f.name === "Nom").description).toBeUndefined();
   });
 
+  it("regroupe les tables par préfixe de nom partagé (T01_, T02_...)", () => {
+    const rows = [
+      { id: 1, tableId: "T01_Client", summarySourceTable: 0 },
+      { id: 2, tableId: "T02_Commande", summarySourceTable: 0 },
+      { id: 3, tableId: "Divers", summarySourceTable: 0 }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, []);
+    expect(tables.find((t) => t.id === "T01_Client").group).toBe("T");
+    expect(tables.find((t) => t.id === "T02_Commande").group).toBe("T");
+    expect(tables.find((t) => t.id === "Divers").group).toBe("Tables");
+  });
+
   it("assigne à chaque table une position calculée", () => {
     const tables = buildTablesFromGristMetadata(tableRows, columnRows);
     tables.forEach((t) => {
