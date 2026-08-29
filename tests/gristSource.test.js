@@ -23,7 +23,17 @@ describe("buildTablesFromGristMetadata", () => {
   ];
 
   const columnRows = [
-    { id: 10, parentId: 1, parentPos: 2, colId: "Abonnement", type: "Ref:Abonnement", label: "Abonnement", isFormula: false, formula: "" },
+    {
+      id: 10,
+      parentId: 1,
+      parentPos: 2,
+      colId: "Abonnement",
+      type: "Ref:Abonnement",
+      label: "Abonnement",
+      isFormula: false,
+      formula: "",
+      visibleCol: 20
+    },
     { id: 11, parentId: 1, parentPos: 1, colId: "Nom", type: "Text", label: "Nom", isFormula: false, formula: "" },
     { id: 12, parentId: 1, parentPos: 3, colId: "manualSort", type: "ManualSortPos", label: "", isFormula: false, formula: "" },
     { id: 20, parentId: 2, parentPos: 1, colId: "Titre", type: "Text", label: "Titre", isFormula: false, formula: "" },
@@ -72,6 +82,27 @@ describe("buildTablesFromGristMetadata", () => {
     const tables = buildTablesFromGristMetadata(tableRows, columnRows);
     const abonnementField = tables.find((t) => t.id === "Utilisateurs").fields.find((f) => f.name === "Abonnement");
     expect(abonnementField).toMatchObject({ type: "ref", ref: "Abonnement" });
+  });
+
+  it("résout visibleCol vers le libellé de la colonne affichée de la table cible", () => {
+    const tables = buildTablesFromGristMetadata(tableRows, columnRows);
+    const abonnementField = tables.find((t) => t.id === "Utilisateurs").fields.find((f) => f.name === "Abonnement");
+    expect(abonnementField.displayColumn).toBe("Titre");
+  });
+
+  it("n'ajoute pas displayColumn quand visibleCol n'est pas défini", () => {
+    const tables = buildTablesFromGristMetadata(tableRows, columnRows);
+    const formations = tables.find((t) => t.id === "Formations");
+    expect(formations.fields.find((f) => f.name === "JoursRestants").displayColumn).toBeUndefined();
+  });
+
+  it("n'ajoute pas displayColumn si visibleCol pointe vers une colonne inexistante", () => {
+    const rows = [{ id: 1, tableId: "A", summarySourceTable: 0 }];
+    const cols = [
+      { id: 10, parentId: 1, parentPos: 1, colId: "Ref", type: "Ref:B", label: "Ref", isFormula: false, formula: "", visibleCol: 999 }
+    ];
+    const tables = buildTablesFromGristMetadata(rows, cols);
+    expect(tables[0].fields[0].displayColumn).toBeUndefined();
   });
 
   it("attache la formule uniquement quand isFormula est vrai et qu'il y a un texte", () => {

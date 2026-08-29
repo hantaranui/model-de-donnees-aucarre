@@ -33,6 +33,12 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
     (t) => !t.summarySourceTable && !String(t.tableId).startsWith("_grist_")
   );
 
+  // visibleCol référence une colonne par son id interne, potentiellement dans
+  // une autre table que celle qui porte le champ Référence — il faut pouvoir
+  // la retrouver parmi TOUTES les colonnes du document, pas juste celles de
+  // la table courante.
+  const columnsById = new Map(columnRows.map((c) => [c.id, c]));
+
   const tables = visibleTables.map((t) => {
     const fields = columnRows
       .filter((c) => c.parentId === t.id && !isHiddenColumn(c.colId))
@@ -40,7 +46,11 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
       .map((c) => {
         const { type, ref } = mapGristType(c.type);
         const field = { name: c.label || c.colId, type };
-        if (ref) field.ref = ref;
+        if (ref) {
+          field.ref = ref;
+          const displayCol = c.visibleCol ? columnsById.get(c.visibleCol) : null;
+          if (displayCol) field.displayColumn = displayCol.label || displayCol.colId;
+        }
         if (c.isFormula && c.formula) field.formula = c.formula;
         return field;
       });

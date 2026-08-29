@@ -10,7 +10,7 @@
         { name: "Nom", type: "text" },
         { name: "Email", type: "text" },
         { name: "DateInscription", type: "date" },
-        { name: "Abonnement", type: "ref", ref: "Abonnement" },
+        { name: "Abonnement", type: "ref", ref: "Abonnement", displayColumn: "Statut" },
         { name: "GrandCompte", type: "ref", ref: "Auxiliaires_GrandCompte" },
         { name: "FormationsSuivies", type: "reflist", ref: "Formations" }
       ]
@@ -528,6 +528,9 @@
     let extraHTML = "";
     if (field.ref) {
       extraHTML += `<div class="t-label">Cible</div><div class="mono">${escapeHtml(field.ref)}</div>`;
+      if (field.displayColumn) {
+        extraHTML += `<div class="t-display-col">${escapeHtml(field.displayColumn)}</div>`;
+      }
     }
     if (field.formula) {
       extraHTML += `<div class="t-label" style="margin-top:6px;">Formule</div><div class="t-formula">${escapeHtml(field.formula)}</div>`;
@@ -837,11 +840,16 @@
     const visibleTables = tableRows.filter(
       (t) => !t.summarySourceTable && !String(t.tableId).startsWith("_grist_")
     );
+    const columnsById = new Map(columnRows.map((c) => [c.id, c]));
     const tables = visibleTables.map((t) => {
       const fields = columnRows.filter((c) => c.parentId === t.id && !isHiddenColumn(c.colId)).sort((a, b) => a.parentPos - b.parentPos).map((c) => {
         const { type, ref } = mapGristType(c.type);
         const field = { name: c.label || c.colId, type };
-        if (ref) field.ref = ref;
+        if (ref) {
+          field.ref = ref;
+          const displayCol = c.visibleCol ? columnsById.get(c.visibleCol) : null;
+          if (displayCol) field.displayColumn = displayCol.label || displayCol.colId;
+        }
         if (c.isFormula && c.formula) field.formula = c.formula;
         return field;
       });

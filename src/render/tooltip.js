@@ -7,6 +7,9 @@ export function tooltipContent(field, tableName) {
   let extraHTML = "";
   if (field.ref) {
     extraHTML += `<div class="t-label">Cible</div><div class="mono">${escapeHtml(field.ref)}</div>`;
+    if (field.displayColumn) {
+      extraHTML += `<div class="t-display-col">${escapeHtml(field.displayColumn)}</div>`;
+    }
   }
   if (field.formula) {
     extraHTML += `<div class="t-label" style="margin-top:6px;">Formule</div><div class="t-formula">${escapeHtml(field.formula)}</div>`;

@@ -11,7 +11,7 @@ export const TABLES = [
       { name: "Nom", type: "text" },
       { name: "Email", type: "text" },
       { name: "DateInscription", type: "date" },
-      { name: "Abonnement", type: "ref", ref: "Abonnement" },
+      { name: "Abonnement", type: "ref", ref: "Abonnement", displayColumn: "Statut" },
       { name: "GrandCompte", type: "ref", ref: "Auxiliaires_GrandCompte" },
       { name: "FormationsSuivies", type: "reflist", ref: "Formations" }
     ]

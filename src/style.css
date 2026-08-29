@@ -16,6 +16,7 @@
   --accent-contrast: #062019;
   --tooltip-accent: #44F8CC;
   --tooltip-focus-accent: #FF9470;
+  --tooltip-yellow-accent: #F4E04D;
   --formula: #D9603A;
   --formula-soft: #FDEAE3;
   /* Couleur dédiée au "mode focus" (sélection d'une table) : volontairement
@@ -47,6 +48,7 @@
     --accent-contrast: #052018;
     --tooltip-accent: #0FAE93;
     --tooltip-focus-accent: #F77245;
+    --tooltip-yellow-accent: #7A6300;
     --formula: #FF9470;
     --formula-soft: rgba(247, 114, 69, 0.16);
     --focus-accent: #FF9470;
@@ -74,6 +76,7 @@
   --accent-contrast: #052018;
   --tooltip-accent: #0FAE93;
   --tooltip-focus-accent: #F77245;
+  --tooltip-yellow-accent: #7A6300;
   --formula: #FF9470;
   --formula-soft: rgba(247, 114, 69, 0.16);
   --focus-accent: #FF9470;
@@ -634,6 +637,13 @@ html, body {
   color: var(--tooltip-accent);
   font-weight: 600;
   margin-bottom: 6px;
+}
+.tooltip .t-display-col {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tooltip-yellow-accent);
+  margin-top: 1px;
 }
 .tooltip .t-formula {
   font-family: "JetBrains Mono", monospace;

@@ -24,6 +24,28 @@ describe("tooltipContent", () => {
     expect(content.extraHTML).toContain("Formule");
   });
 
+  it("champ référence avec colonne affichée : ajoute une ligne sous la cible", () => {
+    const content = tooltipContent({ name: "Abonnement", type: "ref", ref: "Abonnement", displayColumn: "Statut" });
+    expect(content.extraHTML).toContain("t-display-col");
+    expect(content.extraHTML).toContain("Statut");
+  });
+
+  it("champ référence sans colonne affichée : pas de ligne supplémentaire", () => {
+    const content = tooltipContent({ name: "Abonnement", type: "ref", ref: "Abonnement" });
+    expect(content.extraHTML).not.toContain("t-display-col");
+  });
+
+  it("échappe une colonne affichée malveillante", () => {
+    const content = tooltipContent({
+      name: "X",
+      type: "ref",
+      ref: "Y",
+      displayColumn: `<img src=x onerror=alert(1)>`
+    });
+    expect(content.extraHTML).not.toContain("<img");
+    expect(content.extraHTML).toContain("&lt;img");
+  });
+
   it("type inconnu : retombe sur le nom brut du type", () => {
     const content = tooltipContent({ name: "X", type: "mystere" });
     expect(content.typeLabel).toBe("mystere");
