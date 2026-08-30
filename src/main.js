@@ -35,6 +35,26 @@ const dom = {
   focusBanner: byId("focus-banner"),
   focusName: byId("focus-name"),
   focusClear: byId("focus-clear"),
+  editModeToggle: byId("edit-mode-toggle"),
+  editModeBanner: byId("edit-mode-banner"),
+  newTableBtn: byId("new-table-btn"),
+  stagingCount: byId("staging-count"),
+  discardStagingBtn: byId("discard-staging-btn"),
+  commitSchemaBtn: byId("commit-schema-btn"),
+  confirmDialog: byId("confirm-dialog"),
+  confirmMessage: byId("confirm-message"),
+  confirmConfirmBtn: byId("confirm-confirm"),
+  confirmCancelBtn: byId("confirm-cancel"),
+  linkDraftDialog: byId("link-draft-dialog"),
+  linkDraftSource: byId("link-draft-source"),
+  linkDraftTarget: byId("link-draft-target"),
+  linkDraftName: byId("link-draft-name"),
+  linkDraftType: byId("link-draft-type"),
+  linkDraftDisplayCol: byId("link-draft-display-col"),
+  linkDraftError: byId("link-draft-error"),
+  linkDraftConfirmBtn: byId("link-draft-confirm"),
+  linkDraftCancelBtn: byId("link-draft-cancel"),
+  toast: byId("toast"),
   legend: byId("legend"),
   legendToggle: byId("legend-toggle"),
   legendBody: byId("legend-body"),
@@ -62,7 +82,7 @@ function showLoadError(message) {
 }
 
 async function resolveTables() {
-  if (!isInIframe(window)) return TABLES;
+  if (!isInIframe(window)) return { tables: TABLES, isLiveGrist: false };
 
   const origin = detectParentOrigin(window);
   if (!origin) {
@@ -76,21 +96,24 @@ async function resolveTables() {
     await loadGristPluginApi(origin);
 
     // Accès complet nécessaire : on lit les tables internes _grist_Tables et
-    // _grist_Tables_column, pas seulement la table liée au widget.
+    // _grist_Tables_column, pas seulement la table liée au widget. Le même
+    // accès permet aussi l'écriture (applyUserActions) utilisée par le mode
+    // édition de la V3.
     window.grist.ready({ requiredAccess: "full" });
 
-    return await withTimeout(
+    const tables = await withTimeout(
       loadFromGrist(),
       GRIST_LOAD_TIMEOUT_MS,
       "Le document Grist met trop de temps à répondre."
     );
+    return { tables, isLiveGrist: true };
   } finally {
     showLoading(false);
   }
 }
 
 resolveTables()
-  .then((tables) => initApp(dom, tables))
+  .then(({ tables, isLiveGrist }) => initApp(dom, tables, { isLiveGrist }))
   .catch((err) => {
     console.error(err);
     showLoadError(

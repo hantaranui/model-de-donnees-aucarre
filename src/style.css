@@ -35,6 +35,11 @@
   --line-muted: rgba(15, 174, 147, 0.6);
   --canvas-dot: rgba(89, 115, 110, 0.18);
   --sidebar-w: 172px;
+  /* Couleur dédiée au mode édition (V3) : volontairement une couleur
+     d'alerte (rouge), distincte de tout le reste de la palette, pour que
+     "ce mode peut écrire dans le vrai document" reste visible en permanence. */
+  --edit-accent: #D8314A;
+  --edit-accent-soft: #FBE1E5;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -66,6 +71,8 @@
     --shadow-strong: rgba(0, 0, 0, 0.55);
     --line-muted: rgba(68, 248, 204, 0.55);
     --canvas-dot: rgba(150, 180, 174, 0.14);
+    --edit-accent: #FF6B7A;
+    --edit-accent-soft: rgba(255, 107, 122, 0.16);
   }
 }
 
@@ -97,6 +104,8 @@
   --shadow-strong: rgba(0, 0, 0, 0.55);
   --line-muted: rgba(68, 248, 204, 0.55);
   --canvas-dot: rgba(150, 180, 174, 0.14);
+  --edit-accent: #FF6B7A;
+  --edit-accent-soft: rgba(255, 107, 122, 0.16);
 }
 
 * { box-sizing: border-box; }
@@ -287,6 +296,327 @@ html, body {
 .icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
 .icon-btn svg { width: 13px; height: 13px; }
 
+/* ---------- Mode édition (V3) ---------- */
+.edit-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+.edit-mode-toggle svg { width: 13px; height: 13px; }
+.edit-mode-toggle:hover { color: var(--text); border-color: var(--border-strong); }
+.edit-mode-toggle.is-active {
+  color: var(--edit-accent);
+  background: var(--edit-accent-soft);
+  border-color: var(--edit-accent);
+}
+
+.edit-mode-banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 12px;
+  background: var(--edit-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 10px 8px 14px;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px var(--shadow-strong);
+  z-index: 16;
+}
+.edit-mode-banner.is-visible { display: flex; }
+.edit-mode-info {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: help;
+}
+.edit-mode-info:hover { background: rgba(255, 255, 255, 0.12); }
+.new-table-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--edit-accent);
+  background: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.new-table-btn svg { width: 12px; height: 12px; }
+.new-table-btn:hover { filter: brightness(0.96); }
+.new-table-btn:disabled { opacity: 0.5; cursor: default; }
+
+.staging-count {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+}
+.discard-staging-btn, .commit-schema-btn {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  border-radius: 7px;
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.discard-staging-btn {
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+.discard-staging-btn:hover { background: rgba(255, 255, 255, 0.12); }
+.commit-schema-btn {
+  background: #fff;
+  color: var(--edit-accent);
+}
+.commit-schema-btn:hover { filter: brightness(0.96); }
+
+.add-field-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--edit-accent);
+  cursor: pointer;
+}
+.add-field-row:hover { background: var(--edit-accent-soft); }
+.add-field-icon { font-weight: 700; width: 14px; text-align: center; flex: none; }
+/* Un brouillon (table ou champ) est actif ailleurs : on désactive les autres
+   déclencheurs de création pour garder une seule action à la fois. */
+.canvas-content.is-drafting .add-field-row { pointer-events: none; opacity: 0.35; }
+
+.field-row.is-draft-field {
+  height: auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--edit-accent-soft);
+}
+.draft-field-hint {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--edit-accent);
+}
+.draft-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.draft-field-name, .draft-field-type, .draft-field-choices {
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+.draft-field-name:focus, .draft-field-type:focus, .draft-field-choices:focus {
+  outline: 2px solid var(--edit-accent-soft);
+  border-color: var(--edit-accent);
+}
+.draft-field-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.draft-field-actions button {
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 5px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.draft-field-actions button:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
+.draft-field-actions button:disabled { opacity: 0.5; cursor: default; }
+.draft-field-create {
+  background: var(--edit-accent) !important;
+  border-color: var(--edit-accent) !important;
+  color: #fff !important;
+}
+.draft-field-error { font-size: 10.5px; color: var(--edit-accent); line-height: 1.4; }
+.field-row.is-draft-field.is-pending { opacity: 0.7; }
+
+.table-card.is-draft {
+  border: 1.5px dashed var(--edit-accent);
+  box-shadow: 0 6px 20px var(--shadow-strong);
+  z-index: 12;
+}
+.table-card.is-draft .card-header { background: var(--edit-accent-soft); cursor: default; }
+.table-card.is-draft.is-pending { opacity: 0.7; }
+
+/* Table/champ en brouillon (V3 : schéma dessiné mais pas encore validé) :
+   même couleur d'alerte que le reste du mode édition, pointillés pour ne
+   jamais se confondre avec un élément déjà réel dans le document. */
+.table-card.is-staged { border: 1.5px dashed var(--edit-accent); }
+.table-card.is-staged .card-header { background: var(--edit-accent-soft); }
+.field-row.is-staged { background: var(--edit-accent-soft); }
+
+.link-handle {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  font-size: 12px;
+  line-height: 1;
+  cursor: crosshair;
+  color: var(--text-muted);
+}
+.link-handle:hover { background: var(--accent-soft); color: var(--accent-strong); }
+
+.staged-remove {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--edit-accent);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.staged-remove:hover { background: var(--edit-accent-soft); }
+.draft-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.draft-name-input {
+  font-family: inherit;
+  font-size: 12.5px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+.draft-name-input:focus { outline: 2px solid var(--edit-accent-soft); border-color: var(--edit-accent); }
+.draft-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.draft-actions button {
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.draft-actions button:hover:not(:disabled) { color: var(--text); border-color: var(--border-strong); }
+.draft-actions button:disabled { opacity: 0.5; cursor: default; }
+.draft-create {
+  background: var(--edit-accent) !important;
+  border-color: var(--edit-accent) !important;
+  color: #fff !important;
+}
+.draft-error {
+  font-size: 11px;
+  color: var(--edit-accent);
+  line-height: 1.4;
+}
+
+.confirm-dialog {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(9, 12, 11, 0.45);
+  z-index: 40;
+}
+.confirm-dialog.is-visible { display: flex; }
+.confirm-box {
+  max-width: 420px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 14px 40px var(--shadow-strong);
+}
+.confirm-message {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-line;
+}
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.confirm-actions button {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.confirm-actions button:hover { color: var(--text); border-color: var(--border-strong); }
+.confirm-confirm {
+  background: var(--edit-accent) !important;
+  border-color: var(--edit-accent) !important;
+  color: #fff !important;
+}
+
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(12px);
+  max-width: 420px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  padding: 10px 16px;
+  border-radius: 9px;
+  box-shadow: 0 10px 30px var(--shadow-strong);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+  z-index: 50;
+}
+.toast.is-visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
 /* ---------- Body layout ---------- */
 .body {
   flex: 1;
@@ -397,6 +727,14 @@ html, body {
 .wire.is-active { stroke: var(--accent-strong); stroke-width: 2.2; opacity: 1 !important; }
 .wire.is-hovered { stroke: var(--accent-strong); stroke-width: 2.6; opacity: 1 !important; }
 .wire.is-hidden { opacity: 0; }
+/* Liaison brouillon (pas encore validée) : même couleur d'alerte que le
+   reste du mode édition, pointillée pour rester cohérente avec les cartes
+   et champs en brouillon. Reste soumise au même système de visibilité
+   (focus/survol) que les liaisons réelles — seul le style change. */
+.wire.is-staged { stroke: var(--edit-accent); stroke-dasharray: 5 4; }
+.wire.is-staged.is-active, .wire.is-staged.is-hovered { stroke: var(--edit-accent); }
+/* Trait temporaire suivant la souris pendant le tracé d'une liaison. */
+.wire.is-drawing { stroke: var(--edit-accent); stroke-width: 2; stroke-dasharray: 4 4; opacity: 0.85 !important; }
 
 /* ---------- Table card ---------- */
 .table-card {

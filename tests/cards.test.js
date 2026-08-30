@@ -58,6 +58,17 @@ describe("fieldRowHTML", () => {
     expect(html).not.toContain("is-broken-ref");
   });
 
+  it("champ brouillon : porte la classe is-staged et un bouton de retrait", () => {
+    const html = fieldRowHTML("Utilisateurs", { name: "Age", type: "int", isStaged: true }, 0);
+    expect(html).toContain("is-staged");
+    expect(html).toContain("staged-remove-field");
+  });
+
+  it("champ non brouillon : pas de bouton de retrait", () => {
+    const html = fieldRowHTML("Utilisateurs", { name: "Age", type: "int" }, 0);
+    expect(html).not.toContain("staged-remove-field");
+  });
+
   it("échappe la table cible d'une référence cassée", () => {
     const html = fieldRowHTML(
       "A",

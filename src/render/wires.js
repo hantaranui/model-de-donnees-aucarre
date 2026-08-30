@@ -13,6 +13,7 @@ export function renderWires(svg, connections, positions) {
 
     const path = document.createElementNS(SVG_NS, "path");
     path.classList.add("wire");
+    if (c.isStaged) path.classList.add("is-staged");
     path.dataset.key = c.key;
     path.setAttribute("d", connectorPath(a, b, c.kind));
     frag.appendChild(path);

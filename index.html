@@ -36,6 +36,10 @@
         <input id="search" type="text" name="constellation-table-search" autocomplete="off" placeholder="Rechercher une table ou un champ…">
       </div>
       <div class="topbar-right">
+        <button class="edit-mode-toggle" id="edit-mode-toggle" type="button" aria-pressed="false" title="Passer en mode édition pour créer des tables, colonnes et liaisons">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5 16.5 6.5 7 16H4v-3z"/></svg>
+          Mode édition
+        </button>
         <div class="mode-toggle">
           <button id="mode-focus" class="active">Mode focus</button>
           <button id="mode-all">Toutes les liaisons</button>
@@ -69,6 +73,22 @@
               <li>Une description de table ou de champ ("Mettre une description" dans le panneau de configuration Grist) apparaît ici au survol.</li>
             </ul>
           </div>
+        </div>
+
+        <div class="edit-mode-banner" id="edit-mode-banner">
+          <button
+            type="button"
+            class="edit-mode-info"
+            title="Dessine ton schéma (tables, champs, liaisons) directement sur le canvas — rien n'est écrit dans Grist avant de cliquer sur « Valider le schéma »."
+            aria-label="À propos du mode édition"
+          >ⓘ</button>
+          <button class="new-table-btn" id="new-table-btn" type="button">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>
+            Nouvelle table
+          </button>
+          <span class="staging-count" id="staging-count" hidden></span>
+          <button class="discard-staging-btn" id="discard-staging-btn" type="button" hidden>Tout annuler</button>
+          <button class="commit-schema-btn" id="commit-schema-btn" type="button" hidden>Valider le schéma</button>
         </div>
 
         <div class="focus-banner" id="focus-banner">
@@ -110,6 +130,38 @@
     <div class="t-type" id="tt-type"></div>
     <div id="tt-extra"></div>
   </div>
+
+  <div class="confirm-dialog" id="confirm-dialog">
+    <div class="confirm-box">
+      <p class="confirm-message" id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button type="button" class="confirm-cancel" id="confirm-cancel">Annuler</button>
+        <button type="button" class="confirm-confirm" id="confirm-confirm">Valider</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="confirm-dialog" id="link-draft-dialog">
+    <div class="confirm-box">
+      <p class="confirm-message">Créer une liaison de « <strong id="link-draft-source"></strong> » vers « <strong id="link-draft-target"></strong> »</p>
+      <div class="draft-body">
+        <input type="text" id="link-draft-name" class="draft-field-name" placeholder="Nom du champ de référence…" maxlength="80" autocomplete="off" spellcheck="false">
+        <select id="link-draft-type" class="draft-field-type">
+          <option value="ref">Référence</option>
+          <option value="reflist">Référence multiple</option>
+        </select>
+        <label class="draft-field-label" for="link-draft-display-col">Colonne à afficher (dans la table cible)</label>
+        <select id="link-draft-display-col" class="draft-field-type"></select>
+        <div class="draft-field-error" id="link-draft-error" hidden></div>
+      </div>
+      <div class="confirm-actions">
+        <button type="button" class="confirm-cancel" id="link-draft-cancel">Annuler</button>
+        <button type="button" class="confirm-confirm" id="link-draft-confirm">Ajouter</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
 
   <script src="widget.js"></script>
 </body>

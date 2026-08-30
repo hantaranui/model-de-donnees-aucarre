@@ -14,6 +14,16 @@ export function tableAnchor(positions, tableId, offset = 0) {
   return { x: pos.x, y: pos.y + HEADER_H / 2 + offset };
 }
 
+// Convertit une position souris écran (clientX/clientY) en coordonnées du
+// canvas non zoomé — même formule que setZoomAround dans app.js, réutilisée
+// ici pour tracer un trait de liaison qui suit la souris pendant le tracé.
+export function canvasPointFromClient(clientX, clientY, rect, scrollLeft, scrollTop, zoom) {
+  return {
+    x: (scrollLeft + clientX - rect.left) / zoom,
+    y: (scrollTop + clientY - rect.top) / zoom
+  };
+}
+
 // Connecteur "elbow" (coudé) : horizontal - vertical - horizontal, avec des
 // coins légèrement arrondis. Les deux extrémités (bord de champ, bord de
 // table) sont toujours abordées à l'horizontale dans notre mise en page,
