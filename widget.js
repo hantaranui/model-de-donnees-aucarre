@@ -176,6 +176,18 @@
     Modules: "#59736E",
     Syst\u00E8me: "#8676D9"
   };
+  var CREATABLE_FIELD_TYPES = [
+    "text",
+    "numeric",
+    "int",
+    "bool",
+    "date",
+    "datetime",
+    "choice",
+    "choicelist",
+    "attachment"
+  ];
+  var CHOICE_LIKE_TYPES = ["choice", "choicelist"];
   var CARD_W = 232;
   var HEADER_H = 38;
   var ROW_H = 27;
@@ -235,7 +247,7 @@
           bidirectional: true
         });
       } else {
-        merged.push({ key: c.key, from: c.from, fieldIndex: c.fieldIndex, to: c.to, kind: c.kind });
+        merged.push({ key: c.key, from: c.from, fieldIndex: c.fieldIndex, to: c.to, kind: c.kind, isStaged: c.isStaged });
       }
     });
     return merged;
@@ -253,7 +265,8 @@
             fieldIndex,
             to: f.ref,
             kind: f.type,
-            reverseField: f.reverseField
+            reverseField: f.reverseField,
+            isStaged: f.isStaged
           });
         }
       });
@@ -331,6 +344,107 @@
     return { genericFields, brokenRefFields, rowIdDisplayFields, emptyColumnFields, untouchedTables };
   }
 
+  // src/data/staging.js
+  function createStagingState() {
+    return { tables: [], fields: [] };
+  }
+  function isStagingEmpty(staging) {
+    return staging.tables.length === 0 && staging.fields.length === 0;
+  }
+  function isStagedTableName(staging, id) {
+    return staging.tables.some((t) => t.name === id);
+  }
+  function sameOwner(a, b) {
+    return a.kind === b.kind && a.id === b.id;
+  }
+  function sameRef(a, b) {
+    if (!a || !b) return false;
+    return a.kind === b.kind && a.id === b.id;
+  }
+  function addStagedTable(staging, name, group = "Brouillon") {
+    return { ...staging, tables: [...staging.tables, { name, group }] };
+  }
+  function removeStagedTable(staging, name) {
+    const owner = { kind: "staged", id: name };
+    return {
+      ...staging,
+      tables: staging.tables.filter((t) => t.name !== name),
+      fields: staging.fields.filter((f) => !sameOwner(f.owner, owner) && !sameRef(f.ref, owner))
+    };
+  }
+  function addStagedField(staging, owner, { name, type, choices, ref, displayField }) {
+    return {
+      ...staging,
+      fields: [
+        ...staging.fields,
+        { owner, name, type, choices: choices || [], ref: ref || null, displayField: displayField || null }
+      ]
+    };
+  }
+  function removeStagedField(staging, owner, name) {
+    return {
+      ...staging,
+      fields: staging.fields.filter((f) => !(sameOwner(f.owner, owner) && f.name === name))
+    };
+  }
+  function stagedFieldsForOwner(staging, ownerKind, ownerId) {
+    return staging.fields.filter((f) => f.owner.kind === ownerKind && f.owner.id === ownerId);
+  }
+  function stagedFieldCount(staging) {
+    return staging.fields.length;
+  }
+  function stagedLinkCount(staging) {
+    return staging.fields.filter((f) => f.ref).length;
+  }
+  function validateNewTableName(staging, tables, name) {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return "Le nom de la table ne peut pas \xEAtre vide.";
+    if (tables.some((t) => t.id === trimmed)) return `Une table \xAB ${trimmed} \xBB existe d\xE9j\xE0 dans le document.`;
+    if (isStagedTableName(staging, trimmed)) return `Une table \xAB ${trimmed} \xBB est d\xE9j\xE0 en brouillon.`;
+    return null;
+  }
+  function validateNewFieldName(staging, tables, owner, name) {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return "Le nom du champ ne peut pas \xEAtre vide.";
+    if (owner.kind === "real") {
+      const table = tables.find((t) => t.id === owner.id);
+      if (table && table.fields.some((f) => f.name === trimmed)) {
+        return `Un champ \xAB ${trimmed} \xBB existe d\xE9j\xE0 dans \xAB ${owner.id} \xBB.`;
+      }
+    }
+    if (stagedFieldsForOwner(staging, owner.kind, owner.id).some((f) => f.name === trimmed)) {
+      return `Un champ \xAB ${trimmed} \xBB est d\xE9j\xE0 en brouillon dans \xAB ${owner.id} \xBB.`;
+    }
+    return null;
+  }
+  function resolveStagedFieldReferences(fields, resolvedTableNames) {
+    const resolveRef = (ref) => {
+      if (ref && ref.kind === "staged" && resolvedTableNames[ref.id]) {
+        return { kind: "real", id: resolvedTableNames[ref.id] };
+      }
+      return ref;
+    };
+    return fields.map((f) => ({
+      ...f,
+      owner: resolveRef(f.owner),
+      ref: f.ref ? resolveRef(f.ref) : f.ref
+    }));
+  }
+  function buildSchemaSummaryText(staging) {
+    const lines = [];
+    staging.tables.forEach((t) => {
+      lines.push(`+ Table \xAB ${t.name} \xBB`);
+    });
+    staging.fields.forEach((f) => {
+      const typeLabel = TYPE_LABELS[f.type] || f.type;
+      const target = f.ref ? ` \u2192 ${f.ref.id}` : "";
+      const displayPart = f.ref && f.displayField ? ` (affiche : ${f.displayField})` : "";
+      const choicesPart = f.choices && f.choices.length ? ` (${f.choices.join(", ")})` : "";
+      lines.push(`+ Champ \xAB ${f.name} \xBB (${typeLabel}${target}${displayPart}${choicesPart}) dans \xAB ${f.owner.id} \xBB`);
+    });
+    return lines.join("\n");
+  }
+
   // src/state.js
   function createState(tables) {
     return {
@@ -339,6 +453,14 @@
       search: "",
       hoveredConn: null,
       zoom: 1,
+      // Mode édition : désactivé par défaut à chaque ouverture du widget — voir
+      // README/consignes V3, "lecture par défaut, édition sur activation
+      // explicite". Aucune interaction de création n'est possible tant que ce
+      // n'est pas true.
+      editMode: false,
+      // Brouillon de schéma (tables/champs/liaisons pas encore écrits dans
+      // Grist) — voir data/staging.js et data/displayModel.js.
+      staging: createStagingState(),
       defaultPositions: defaultPositions(tables),
       positions: defaultPositions(tables)
     };
@@ -573,40 +695,48 @@
     const classes = ["field-row"];
     if (isRef) classes.push("is-ref");
     if (field.brokenRef) classes.push("is-broken-ref");
+    if (field.isStaged) classes.push("is-staged");
     const safeName = escapeHtml(field.name);
     const safeRef = escapeHtml(field.ref);
     const refHTML = field.brokenRef ? `<span class="fref-broken" title="R\xE9f\xE9rence cass\xE9e : la table \xAB ${safeRef} \xBB n'existe plus">\u26A0 ${safeRef}</span>` : isRef ? `<span class="fref-target" data-jump="${safeRef}">\u2192 ${safeRef}</span>` : "";
+    const removeBtn = field.isStaged ? `<button type="button" class="staged-remove staged-remove-field" title="Retirer ce champ du brouillon">\xD7</button>` : "";
     return `<div class="${classes.join(" ")}" data-table="${escapeHtml(tableId)}" data-field="${safeName}" data-idx="${idx}">
       ${icon(field.type)}
       <span class="fname${field.description ? " has-desc" : ""}">${safeName}</span>
       ${field.formula ? '<span class="ftag">\u0192x</span>' : ""}
       ${refHTML}
+      ${removeBtn}
     </div>`;
   }
-  function cardHTML(table, isOrphan) {
+  function cardHTML(table, isOrphan, editMode) {
     const safeId = escapeHtml(table.id);
+    const linkHandle = editMode ? `<button type="button" class="link-handle" title="Tracer une liaison vers une autre table">\u{1F517}</button>` : "";
+    const removeTableBtn = table.isStaged ? `<button type="button" class="staged-remove staged-remove-table" title="Retirer cette table du brouillon">\xD7</button>` : "";
     return `
     <div class="card-header">
       <span class="dot"></span>
       <span class="tname${table.description ? " has-desc" : ""}">${safeId}</span>
       ${isOrphan ? '<span class="otag" title="Aucune liaison entrante ni sortante">Isol\xE9e</span>' : ""}
       <span class="fcount">${table.fields.length}</span>
+      ${linkHandle}
+      ${removeTableBtn}
     </div>
     <div class="card-body">
       ${table.fields.map((f, i) => fieldRowHTML(table.id, f, i)).join("")}
+      ${editMode ? `<div class="field-row add-field-row" data-table="${safeId}"><span class="add-field-icon">+</span><span>Ajouter un champ</span></div>` : ""}
     </div>`;
   }
-  function renderCards(canvasContent, tables, positions, orphanIds = /* @__PURE__ */ new Set()) {
+  function renderCards(canvasContent, tables, positions, orphanIds = /* @__PURE__ */ new Set(), editMode = false) {
     canvasContent.querySelectorAll(".table-card").forEach((el) => el.remove());
     tables.forEach((t) => {
       const pos = positions[t.id];
       const card = document.createElement("div");
-      card.className = "table-card";
+      card.className = t.isStaged ? "table-card is-staged" : "table-card";
       card.dataset.id = t.id;
       card.style.left = `${pos.x}px`;
       card.style.top = `${pos.y}px`;
       card.style.setProperty("--group-color", GROUP_COLORS[t.group] || "#59736E");
-      card.innerHTML = cardHTML(t, orphanIds.has(t.id));
+      card.innerHTML = cardHTML(t, orphanIds.has(t.id), editMode);
       canvasContent.appendChild(card);
     });
   }
@@ -650,10 +780,41 @@
         card.classList.remove("is-dragging");
         if (!moved) callbacks.onCardToggled(card.dataset.id);
       });
-      card.querySelectorAll(".field-row").forEach((row) => {
+      const linkHandle = card.querySelector(".link-handle");
+      if (linkHandle) {
+        linkHandle.addEventListener("mousedown", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          callbacks.onLinkDragStart(card.dataset.id, e.clientX, e.clientY);
+        });
+      }
+      const removeTableBtn = card.querySelector(".staged-remove-table");
+      if (removeTableBtn) {
+        removeTableBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+        removeTableBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          callbacks.onRemoveStagedTable(card.dataset.id);
+        });
+      }
+      const addFieldRow = card.querySelector(".add-field-row");
+      if (addFieldRow) {
+        addFieldRow.addEventListener("click", (e) => {
+          e.stopPropagation();
+          callbacks.onAddField(card.dataset.id, addFieldRow);
+        });
+      }
+      card.querySelectorAll(".field-row:not(.add-field-row)").forEach((row) => {
         row.addEventListener("mouseenter", (e) => callbacks.onFieldHover(row, e));
         row.addEventListener("mousemove", (e) => callbacks.onFieldMove(e));
         row.addEventListener("mouseleave", () => callbacks.onFieldLeave());
+        const removeFieldBtn = row.querySelector(".staged-remove-field");
+        if (removeFieldBtn) {
+          removeFieldBtn.addEventListener("mousedown", (e) => e.stopPropagation());
+          removeFieldBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            callbacks.onRemoveStagedField(card.dataset.id, row.dataset.field);
+          });
+        }
         if (row.classList.contains("is-ref")) {
           row.addEventListener("mouseenter", () => callbacks.onRefEnter(row));
           row.addEventListener("mouseleave", () => callbacks.onRefLeave());
@@ -678,6 +839,12 @@
   function tableAnchor(positions, tableId, offset = 0) {
     const pos = positions[tableId];
     return { x: pos.x, y: pos.y + HEADER_H / 2 + offset };
+  }
+  function canvasPointFromClient(clientX, clientY, rect, scrollLeft, scrollTop, zoom) {
+    return {
+      x: (scrollLeft + clientX - rect.left) / zoom,
+      y: (scrollTop + clientY - rect.top) / zoom
+    };
   }
   function elbowPath(a, b, cornerRadius = 8) {
     if (a.y === b.y) return `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
@@ -725,6 +892,7 @@
       const b = c.bidirectional ? fieldAnchor(positions, c.to, c.toFieldIndex, "left") : tableAnchor(positions, c.to, c.targetOffset);
       const path = document.createElementNS(SVG_NS, "path");
       path.classList.add("wire");
+      if (c.isStaged) path.classList.add("is-staged");
       path.dataset.key = c.key;
       path.setAttribute("d", connectorPath(a, b, c.kind));
       frag.appendChild(path);
@@ -825,6 +993,124 @@
     return { show, showTable, move, hide };
   }
 
+  // src/render/draftCard.js
+  function createDraftTableCard({ x, y }) {
+    const card = document.createElement("div");
+    card.className = "table-card is-draft";
+    card.style.left = `${x}px`;
+    card.style.top = `${y}px`;
+    card.innerHTML = `
+    <div class="card-header">
+      <span class="dot"></span>
+      <span class="tname">Nouvelle table</span>
+    </div>
+    <div class="card-body draft-body">
+      <input type="text" class="draft-name-input" placeholder="Nom de la table\u2026" maxlength="80" autocomplete="off" spellcheck="false">
+      <div class="draft-actions">
+        <button type="button" class="draft-cancel">Annuler</button>
+        <button type="button" class="draft-create" disabled>Ajouter</button>
+      </div>
+      <div class="draft-error" hidden></div>
+    </div>`;
+    return card;
+  }
+
+  // src/render/draftField.js
+  function createDraftFieldRow() {
+    const row = document.createElement("div");
+    row.className = "field-row is-draft-field";
+    const options = CREATABLE_FIELD_TYPES.map(
+      (type) => `<option value="${type}">${escapeHtml(TYPE_LABELS[type])}</option>`
+    ).join("");
+    row.innerHTML = `
+    <div class="draft-field-hint">Brouillon \u2014 rien n'est encore cr\xE9\xE9</div>
+    <input type="text" class="draft-field-name" placeholder="Nom du champ\u2026" maxlength="80" autocomplete="off" spellcheck="false">
+    <select class="draft-field-type">${options}</select>
+    <input type="text" class="draft-field-choices" placeholder="Options s\xE9par\xE9es par une virgule (ex. Actif, Inactif)" maxlength="400" autocomplete="off" spellcheck="false" hidden>
+    <div class="draft-field-actions">
+      <button type="button" class="draft-field-cancel">Annuler</button>
+      <button type="button" class="draft-field-create" disabled>Ajouter</button>
+    </div>
+    <div class="draft-field-error" hidden></div>`;
+    return row;
+  }
+  function isChoiceLikeType(type) {
+    return CHOICE_LIKE_TYPES.includes(type);
+  }
+
+  // src/render/confirmDialog.js
+  function showConfirmDialog(dom2, { message, confirmLabel = "Cr\xE9er", onConfirm, onCancel }) {
+    dom2.confirmMessage.textContent = message;
+    dom2.confirmConfirmBtn.textContent = confirmLabel;
+    dom2.confirmDialog.classList.add("is-visible");
+    function cleanup() {
+      dom2.confirmDialog.classList.remove("is-visible");
+      dom2.confirmConfirmBtn.removeEventListener("click", handleConfirm);
+      dom2.confirmCancelBtn.removeEventListener("click", handleCancel);
+      dom2.confirmDialog.removeEventListener("click", handleOverlayClick);
+    }
+    function handleConfirm() {
+      cleanup();
+      onConfirm();
+    }
+    function handleCancel() {
+      cleanup();
+      if (onCancel) onCancel();
+    }
+    function handleOverlayClick(e) {
+      if (e.target === dom2.confirmDialog) handleCancel();
+    }
+    dom2.confirmConfirmBtn.addEventListener("click", handleConfirm);
+    dom2.confirmCancelBtn.addEventListener("click", handleCancel);
+    dom2.confirmDialog.addEventListener("click", handleOverlayClick);
+  }
+
+  // src/render/linkDraftDialog.js
+  var NO_DISPLAY_FIELD = "";
+  function showLinkDraftDialog(dom2, { sourceLabel, targetLabel, defaultName, displayFieldOptions = [], onSubmit, onCancel }) {
+    dom2.linkDraftSource.textContent = sourceLabel;
+    dom2.linkDraftTarget.textContent = targetLabel;
+    dom2.linkDraftName.value = defaultName;
+    dom2.linkDraftType.value = "ref";
+    dom2.linkDraftDisplayCol.innerHTML = `<option value="${NO_DISPLAY_FIELD}">Identifiant interne (par d\xE9faut)</option>` + displayFieldOptions.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("");
+    dom2.linkDraftError.hidden = true;
+    dom2.linkDraftDialog.classList.add("is-visible");
+    dom2.linkDraftName.focus();
+    dom2.linkDraftName.select();
+    function cleanup() {
+      dom2.linkDraftDialog.classList.remove("is-visible");
+      dom2.linkDraftConfirmBtn.removeEventListener("click", handleConfirm);
+      dom2.linkDraftCancelBtn.removeEventListener("click", handleCancel);
+      dom2.linkDraftName.removeEventListener("keydown", handleKeydown);
+      dom2.linkDraftDialog.removeEventListener("click", handleOverlayClick);
+    }
+    function handleConfirm() {
+      const displayField = dom2.linkDraftDisplayCol.value || null;
+      const result = onSubmit(dom2.linkDraftName.value, dom2.linkDraftType.value, displayField);
+      if (result && result.error) {
+        dom2.linkDraftError.hidden = false;
+        dom2.linkDraftError.textContent = result.error;
+        return;
+      }
+      cleanup();
+    }
+    function handleCancel() {
+      cleanup();
+      if (onCancel) onCancel();
+    }
+    function handleKeydown(e) {
+      if (e.key === "Enter") handleConfirm();
+      if (e.key === "Escape") handleCancel();
+    }
+    function handleOverlayClick(e) {
+      if (e.target === dom2.linkDraftDialog) handleCancel();
+    }
+    dom2.linkDraftConfirmBtn.addEventListener("click", handleConfirm);
+    dom2.linkDraftCancelBtn.addEventListener("click", handleCancel);
+    dom2.linkDraftName.addEventListener("keydown", handleKeydown);
+    dom2.linkDraftDialog.addEventListener("click", handleOverlayClick);
+  }
+
   // src/focus.js
   function applyFocusStyles(canvasContent, connections, focusedId) {
     const related = focusedId ? connectedTables(connections, focusedId) : null;
@@ -870,189 +1156,38 @@
     return Math.max(MIN_ZOOM, Math.min(1, scale));
   }
 
-  // src/app.js
-  function initApp(dom2, rawTables = TABLES) {
-    const tables = markBrokenReferences(rawTables);
-    const connections = buildConnections(tables);
-    const orphanIds = orphanTableIds(tables, connections);
-    const state = createState(tables);
-    dom2.statTables.textContent = String(tables.length);
-    dom2.statFields.textContent = String(tables.reduce((n, t) => n + t.fields.length, 0));
-    dom2.statLinks.textContent = String(connections.length);
-    const showEmptyState = isEffectivelyEmpty(tables);
-    dom2.emptyState.classList.toggle("is-visible", showEmptyState);
-    if (showEmptyState) return { state, connections, setFocus: () => {
-    } };
-    renderLegend(dom2.legendBody);
-    bindLegendToggle(dom2.legend, dom2.legendToggle);
-    renderHealthPanel(
-      dom2.healthBody,
-      computeModelHealth(tables),
-      (tableId, fieldName) => fieldName ? jumpToField(tableId, fieldName) : jumpTo(tableId)
-    );
-    bindLegendToggle(dom2.healthPanel, dom2.healthToggle);
-    const tooltip = createTooltipController(dom2.tooltip, dom2.ttTable, dom2.ttName, dom2.ttType, dom2.ttExtra);
-    function applyZoom() {
-      dom2.canvasContent.style.transform = `scale(${state.zoom})`;
-      dom2.zoomLevel.textContent = `${Math.round(state.zoom * 100)}%`;
-    }
-    function setZoom(value) {
-      state.zoom = clampZoom(value);
-      applyZoom();
-    }
-    function setZoomAround(value, clientX, clientY) {
-      const rect = dom2.canvasWrap.getBoundingClientRect();
-      const contentX = (dom2.canvasWrap.scrollLeft + clientX - rect.left) / state.zoom;
-      const contentY = (dom2.canvasWrap.scrollTop + clientY - rect.top) / state.zoom;
-      setZoom(value);
-      dom2.canvasWrap.scrollLeft = contentX * state.zoom - (clientX - rect.left);
-      dom2.canvasWrap.scrollTop = contentY * state.zoom - (clientY - rect.top);
-    }
-    function fitToView() {
-      if (!tables.length) return;
-      const bounds = tablesBounds(tables, state.positions, CARD_W, cardHeight);
-      const viewport = { width: dom2.canvasWrap.clientWidth, height: dom2.canvasWrap.clientHeight };
-      state.zoom = computeFitZoom(bounds, viewport);
-      applyZoom();
-      const contentW = (bounds.maxX - bounds.minX) * state.zoom;
-      const contentH = (bounds.maxY - bounds.minY) * state.zoom;
-      dom2.canvasWrap.scrollLeft = bounds.minX * state.zoom - (viewport.width - contentW) / 2;
-      dom2.canvasWrap.scrollTop = bounds.minY * state.zoom - (viewport.height - contentH) / 2;
-    }
-    function renderAll() {
-      renderSidebar(dom2.sidebar, tables, state.focused, (id) => setFocus(state.focused === id ? null : id), orphanIds);
-      renderCards(dom2.canvasContent, tables, state.positions, orphanIds);
-      attachCardBehaviors(dom2.canvasContent, state.positions, {
-        onCardMoved: () => {
-          renderWires(dom2.wires, connections, state.positions);
-          updateWireVisibility(dom2.wires, connections, state);
-          applyFocusStyles(dom2.canvasContent, connections, state.focused);
-        },
-        onCardToggled: (id) => setFocus(state.focused === id ? null : id),
-        onFieldHover: (row) => {
-          const table = tableById(tables, row.dataset.table);
-          const field = table.fields.find((f) => f.name === row.dataset.field);
-          tooltip.show(field, table.id);
-        },
-        onFieldMove: (event) => tooltip.move(event),
-        onFieldLeave: () => tooltip.hide(),
-        onRefEnter: (row) => {
-          state.hoveredConn = `${row.dataset.table}.${row.dataset.field}`;
-          updateWireVisibility(dom2.wires, connections, state);
-        },
-        onRefLeave: () => {
-          state.hoveredConn = null;
-          updateWireVisibility(dom2.wires, connections, state);
-        },
-        onRefJump: (targetId) => jumpTo(targetId),
-        onTableHover: (tableId) => tooltip.showTable(tableById(tables, tableId)),
-        onTableMove: (event) => tooltip.move(event),
-        onTableLeave: () => tooltip.hide()
-      }, () => state.zoom);
-      renderWires(dom2.wires, connections, state.positions);
-      updateWireVisibility(dom2.wires, connections, state);
-      applyFocusStyles(dom2.canvasContent, connections, state.focused);
-    }
-    function scrollToCard(tableId) {
-      const card = dom2.canvasContent.querySelector(`.table-card[data-id="${CSS.escape(tableId)}"]`);
-      if (card) card.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-    }
-    function jumpTo(tableId) {
-      setFocus(tableId);
-      scrollToCard(tableId);
-    }
-    function jumpToField(tableId, fieldName) {
-      setFocus(tableId);
-      const row = dom2.canvasContent.querySelector(
-        `.table-card[data-id="${CSS.escape(tableId)}"] .field-row[data-field="${CSS.escape(fieldName)}"]`
-      );
-      if (!row) {
-        scrollToCard(tableId);
-        return;
-      }
-      row.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-      row.classList.remove("is-jump-target");
-      void row.offsetWidth;
-      row.classList.add("is-jump-target");
-      row.addEventListener("animationend", () => row.classList.remove("is-jump-target"), { once: true });
-    }
-    function setFocus(id) {
-      state.focused = id;
-      if (id) {
-        dom2.focusBanner.classList.add("is-visible");
-        dom2.focusName.textContent = id;
-      } else {
-        dom2.focusBanner.classList.remove("is-visible");
-      }
-      applyFocusStyles(dom2.canvasContent, connections, state.focused);
-      updateWireVisibility(dom2.wires, connections, state);
-      renderSidebar(
-        dom2.sidebar,
-        tables,
-        state.focused,
-        (rowId) => setFocus(state.focused === rowId ? null : rowId),
-        orphanIds
-      );
-    }
-    dom2.search.addEventListener("input", (e) => {
-      state.search = e.target.value;
-      applySearchToCards(dom2.canvasContent, tables, state.search);
-      applySidebarSearch(dom2.sidebar, tables, state.search);
-    });
-    dom2.modeFocusBtn.addEventListener("click", () => {
-      state.showAll = false;
-      dom2.modeFocusBtn.classList.add("active");
-      dom2.modeAllBtn.classList.remove("active");
-      updateWireVisibility(dom2.wires, connections, state);
-    });
-    dom2.modeAllBtn.addEventListener("click", () => {
-      state.showAll = true;
-      dom2.modeAllBtn.classList.add("active");
-      dom2.modeFocusBtn.classList.remove("active");
-      updateWireVisibility(dom2.wires, connections, state);
-    });
-    dom2.focusClear.addEventListener("click", () => setFocus(null));
-    dom2.resetLayout.addEventListener("click", () => {
-      const positions = resetPositions(state);
-      dom2.canvasContent.querySelectorAll(".table-card").forEach((card) => {
-        const pos = positions[card.dataset.id];
-        card.style.left = `${pos.x}px`;
-        card.style.top = `${pos.y}px`;
-      });
-      renderWires(dom2.wires, connections, state.positions);
-      applyFocusStyles(dom2.canvasContent, connections, state.focused);
-      fitToView();
-    });
-    dom2.canvasContent.addEventListener("mousedown", (e) => {
-      if (e.target === dom2.canvasContent || e.target === dom2.wires) setFocus(null);
-    });
-    dom2.zoomIn.addEventListener("click", () => setZoom(state.zoom * ZOOM_STEP));
-    dom2.zoomOut.addEventListener("click", () => setZoom(state.zoom / ZOOM_STEP));
-    dom2.zoomLevel.addEventListener("click", () => setZoom(1));
-    dom2.zoomFit.addEventListener("click", () => fitToView());
-    dom2.canvasWrap.addEventListener(
-      "wheel",
-      (e) => {
-        if (!e.ctrlKey && !e.metaKey) return;
-        e.preventDefault();
-        const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-        setZoomAround(state.zoom * factor, e.clientX, e.clientY);
-      },
-      { passive: false }
-    );
-    renderAll();
-    if (dom2.canvasWrap.clientWidth > 0 && dom2.canvasWrap.clientHeight > 0) {
-      fitToView();
-    } else {
-      const observer = new ResizeObserver(() => {
-        if (dom2.canvasWrap.clientWidth > 0 && dom2.canvasWrap.clientHeight > 0) {
-          observer.disconnect();
-          fitToView();
-        }
-      });
-      observer.observe(dom2.canvasWrap);
-    }
-    return { state, connections, setFocus };
+  // src/data/gristWrite.js
+  function sanitizeLabel(rawName) {
+    return String(rawName || "").trim();
+  }
+  function sanitizeColId(rawName) {
+    const trimmed = sanitizeLabel(rawName);
+    if (!trimmed) return "";
+    let id = trimmed.normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "").replace(/[^A-Za-z0-9_]+/g, "_").replace(/^_+|_+$/g, "");
+    if (!id) id = "Champ";
+    if (/^[0-9]/.test(id)) id = `C${id}`;
+    return id;
+  }
+  function parseChoiceOptions(rawText) {
+    return String(rawText || "").split(",").map((value) => value.trim()).filter(Boolean);
+  }
+  function buildChoiceWidgetOptions(choices) {
+    return JSON.stringify({ choices });
+  }
+  function buildAddTableAction(tableName) {
+    return ["AddTable", tableName, []];
+  }
+  function buildAddColumnAction(tableId, colId, colOptions) {
+    return ["AddColumn", tableId, colId, colOptions];
+  }
+  function buildModifyColumnAction(tableId, colId, colOptions) {
+    return ["ModifyColumn", tableId, colId, colOptions];
+  }
+  function buildAddRecordAction(tableId, colValues) {
+    return ["AddRecord", tableId, null, colValues];
+  }
+  async function applyActionsToGrist(actions) {
+    return window.grist.docApi.applyUserActions(actions);
   }
 
   // src/data/gristTypeMapping.js
@@ -1081,6 +1216,32 @@
       default:
         return { type: "text" };
     }
+  }
+  var GRIST_TYPE_BY_KEY = {
+    text: "Text",
+    numeric: "Numeric",
+    int: "Int",
+    bool: "Bool",
+    date: "Date",
+    // Fuseau horaire non demandé à l'utilisateur pour rester simple : à
+    // vérifier contre un vrai document (le fuseau du document lui-même serait
+    // sans doute plus juste qu'un UTC fixe, pas confirmé en pratique).
+    datetime: "DateTime:Etc/UTC",
+    choice: "Choice",
+    choicelist: "ChoiceList",
+    attachment: "Attachments"
+  };
+  function buildGristTypeString(type) {
+    const rawType = GRIST_TYPE_BY_KEY[type];
+    if (!rawType) throw new Error(`Type de champ non pris en charge pour la cr\xE9ation : ${type}`);
+    return rawType;
+  }
+  function buildGristRefTypeString(type, targetTableName) {
+    if (type !== "ref" && type !== "reflist") {
+      throw new Error(`Type de liaison non pris en charge : ${type}`);
+    }
+    const prefix = type === "reflist" ? "RefList" : "Ref";
+    return `${prefix}:${targetTableName}`;
   }
 
   // src/data/tableGrouping.js
@@ -1163,11 +1324,691 @@
     return groupedTables;
   }
   async function loadFromGrist() {
+    const { tableRows, columnRows } = await fetchRawGristMetadata();
+    return buildTablesFromGristMetadata(tableRows, columnRows);
+  }
+  async function fetchRawGristMetadata() {
     const [tableColValues, columnColValues] = await Promise.all([
       window.grist.docApi.fetchTable("_grist_Tables"),
       window.grist.docApi.fetchTable("_grist_Tables_column")
     ]);
-    return buildTablesFromGristMetadata(toRecords(tableColValues), toRecords(columnColValues));
+    return { tableRows: toRecords(tableColValues), columnRows: toRecords(columnColValues) };
+  }
+  async function fetchRawDataSectionsByTableRef() {
+    const [viewColValues, sectionColValues] = await Promise.all([
+      window.grist.docApi.fetchTable("_grist_Views"),
+      window.grist.docApi.fetchTable("_grist_Views_section")
+    ]);
+    const viewRows = toRecords(viewColValues);
+    const sectionRows = toRecords(sectionColValues);
+    const rawDataViewIds = new Set(viewRows.filter((v) => v.type === "raw_data").map((v) => v.id));
+    const byTableRef = /* @__PURE__ */ new Map();
+    sectionRows.forEach((s) => {
+      if (rawDataViewIds.has(s.parentId)) byTableRef.set(s.tableRef, s.id);
+    });
+    return byTableRef;
+  }
+
+  // src/data/displayModel.js
+  function toDisplayField(f) {
+    const field = { name: f.name, type: f.type, isStaged: true };
+    if (f.ref) field.ref = f.ref.id;
+    if (f.choices && f.choices.length) field.choices = f.choices;
+    return field;
+  }
+  function buildDisplayTables(tables, staging) {
+    const realDisplay = tables.map((t) => {
+      const stagedOwnFields = stagedFieldsForOwner(staging, "real", t.id).map(toDisplayField);
+      return stagedOwnFields.length ? { ...t, fields: [...t.fields, ...stagedOwnFields] } : t;
+    });
+    const stagedDisplay = staging.tables.map((t) => ({
+      id: t.name,
+      group: t.group,
+      isStaged: true,
+      fields: stagedFieldsForOwner(staging, "staged", t.name).map(toDisplayField)
+    }));
+    return [...realDisplay, ...stagedDisplay];
+  }
+
+  // src/data/schemaCommit.js
+  function buildAddTableActions(staging) {
+    return staging.tables.map((t) => buildAddTableAction(t.name));
+  }
+  function resolveStagedTableNames(stagedTables, beforeTableRows, afterTableRows) {
+    const beforeIds = new Set(beforeTableRows.map((t) => t.id));
+    const newRows = afterTableRows.filter((t) => !beforeIds.has(t.id)).sort((a, b) => a.id - b.id);
+    const resolved = {};
+    stagedTables.forEach((t, i) => {
+      if (newRows[i]) resolved[t.name] = newRows[i].tableId;
+    });
+    return resolved;
+  }
+  function buildAddColumnActions(staging) {
+    return staging.fields.map((f) => {
+      const colId = sanitizeColId(f.name);
+      const rawType = f.ref ? buildGristRefTypeString(f.type, f.ref.id) : buildGristTypeString(f.type);
+      const colOptions = { type: rawType, label: f.name };
+      if (f.choices && f.choices.length) colOptions.widgetOptions = buildChoiceWidgetOptions(f.choices);
+      return buildAddColumnAction(f.owner.id, colId, colOptions);
+    });
+  }
+  function buildVisibleColActions(staging, tableRows, columnRows) {
+    const tableRowIdByName = new Map(tableRows.map((t) => [t.tableId, t.id]));
+    const columnsByTableRowId = /* @__PURE__ */ new Map();
+    columnRows.forEach((c) => {
+      if (!columnsByTableRowId.has(c.parentId)) columnsByTableRowId.set(c.parentId, []);
+      columnsByTableRowId.get(c.parentId).push(c);
+    });
+    function findColumn(tableName, colLabel) {
+      const tableRowId = tableRowIdByName.get(tableName);
+      if (tableRowId === void 0) return null;
+      const cols = columnsByTableRowId.get(tableRowId) || [];
+      return cols.find((c) => c.label === colLabel) || null;
+    }
+    const actions = [];
+    staging.fields.forEach((f) => {
+      if (!f.ref || !f.displayField) return;
+      const refColumn = findColumn(f.owner.id, f.name);
+      const displayColumn = findColumn(f.ref.id, f.displayField);
+      if (!refColumn || !displayColumn) return;
+      actions.push(buildModifyColumnAction(f.owner.id, refColumn.colId, { visibleCol: displayColumn.id }));
+    });
+    return actions;
+  }
+  function buildRawDataFieldActions(fields, tableRows, columnRows, rawDataSectionByTableRef) {
+    const tableRowIdByName = new Map(tableRows.map((t) => [t.tableId, t.id]));
+    const columnsByTableRowId = /* @__PURE__ */ new Map();
+    columnRows.forEach((c) => {
+      if (!columnsByTableRowId.has(c.parentId)) columnsByTableRowId.set(c.parentId, []);
+      columnsByTableRowId.get(c.parentId).push(c);
+    });
+    const actions = [];
+    fields.forEach((f) => {
+      const tableRowId = tableRowIdByName.get(f.owner.id);
+      if (tableRowId === void 0) return;
+      const sectionId = rawDataSectionByTableRef.get(tableRowId);
+      if (sectionId === void 0) return;
+      const cols = columnsByTableRowId.get(tableRowId) || [];
+      const col = cols.find((c) => c.label === f.name);
+      if (!col) return;
+      actions.push(buildAddRecordAction("_grist_Views_section_field", { parentId: sectionId, colRef: col.id }));
+    });
+    return actions;
+  }
+  function findMissingSchemaItems(staging, freshTables, resolvedTableNames = {}) {
+    const byId2 = new Map(freshTables.map((t) => [t.id, t]));
+    const missingTables = staging.tables.filter((t) => !byId2.has(resolvedTableNames[t.name] || t.name)).map((t) => t.name);
+    const missingFields = staging.fields.filter((f) => {
+      const table = byId2.get(f.owner.id);
+      return !table || !table.fields.some((tf) => tf.name === f.name);
+    }).map((f) => `${f.name} (${f.owner.id})`);
+    return { missingTables, missingFields };
+  }
+
+  // src/app.js
+  var SVG_NS2 = "http://www.w3.org/2000/svg";
+  function initApp(dom2, rawTables = TABLES, options = {}) {
+    const { isLiveGrist = false } = options;
+    const tables = markBrokenReferences(rawTables);
+    const state = createState(tables);
+    dom2.statTables.textContent = String(tables.length);
+    dom2.statFields.textContent = String(tables.reduce((n, t) => n + t.fields.length, 0));
+    dom2.statLinks.textContent = String(buildConnections(tables).length);
+    let toastTimer = null;
+    function showToast(message) {
+      dom2.toast.textContent = message;
+      dom2.toast.classList.add("is-visible");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => dom2.toast.classList.remove("is-visible"), 6e3);
+    }
+    function getDisplay() {
+      const displayTables = markBrokenReferences(buildDisplayTables(tables, state.staging));
+      const displayConnections = buildConnections(displayTables);
+      const displayOrphanIds = orphanTableIds(displayTables, displayConnections);
+      return { displayTables, displayConnections, displayOrphanIds };
+    }
+    renderLegend(dom2.legendBody);
+    bindLegendToggle(dom2.legend, dom2.legendToggle);
+    renderHealthPanel(
+      dom2.healthBody,
+      computeModelHealth(tables),
+      (tableId, fieldName) => fieldName ? jumpToField(tableId, fieldName) : jumpTo(tableId)
+    );
+    bindLegendToggle(dom2.healthPanel, dom2.healthToggle);
+    const tooltip = createTooltipController(dom2.tooltip, dom2.ttTable, dom2.ttName, dom2.ttType, dom2.ttExtra);
+    function applyZoom() {
+      dom2.canvasContent.style.transform = `scale(${state.zoom})`;
+      dom2.zoomLevel.textContent = `${Math.round(state.zoom * 100)}%`;
+    }
+    function setZoom(value) {
+      state.zoom = clampZoom(value);
+      applyZoom();
+    }
+    function setZoomAround(value, clientX, clientY) {
+      const rect = dom2.canvasWrap.getBoundingClientRect();
+      const contentX = (dom2.canvasWrap.scrollLeft + clientX - rect.left) / state.zoom;
+      const contentY = (dom2.canvasWrap.scrollTop + clientY - rect.top) / state.zoom;
+      setZoom(value);
+      dom2.canvasWrap.scrollLeft = contentX * state.zoom - (clientX - rect.left);
+      dom2.canvasWrap.scrollTop = contentY * state.zoom - (clientY - rect.top);
+    }
+    function fitToView() {
+      const { displayTables } = getDisplay();
+      if (!displayTables.length) return;
+      const bounds = tablesBounds(displayTables, state.positions, CARD_W, cardHeight);
+      const viewport = { width: dom2.canvasWrap.clientWidth, height: dom2.canvasWrap.clientHeight };
+      state.zoom = computeFitZoom(bounds, viewport);
+      applyZoom();
+      const contentW = (bounds.maxX - bounds.minX) * state.zoom;
+      const contentH = (bounds.maxY - bounds.minY) * state.zoom;
+      dom2.canvasWrap.scrollLeft = bounds.minX * state.zoom - (viewport.width - contentW) / 2;
+      dom2.canvasWrap.scrollTop = bounds.minY * state.zoom - (viewport.height - contentH) / 2;
+    }
+    function updateEmptyStateOverlay() {
+      const shouldShow = isEffectivelyEmpty(tables) && !state.editMode && isStagingEmpty(state.staging);
+      dom2.emptyState.classList.toggle("is-visible", shouldShow);
+    }
+    function updateStagingToolbar() {
+      const empty = isStagingEmpty(state.staging);
+      dom2.stagingCount.hidden = empty;
+      dom2.discardStagingBtn.hidden = empty;
+      dom2.commitSchemaBtn.hidden = empty;
+      if (empty) return;
+      const linkCount = stagedLinkCount(state.staging);
+      const fieldCount = stagedFieldCount(state.staging) - linkCount;
+      const tableCount = state.staging.tables.length;
+      const parts = [];
+      if (tableCount) parts.push(`${tableCount} table${tableCount > 1 ? "s" : ""}`);
+      if (fieldCount) parts.push(`${fieldCount} champ${fieldCount > 1 ? "s" : ""}`);
+      if (linkCount) parts.push(`${linkCount} liaison${linkCount > 1 ? "s" : ""}`);
+      dom2.stagingCount.textContent = `${parts.join(", ")} en attente`;
+    }
+    function renderAll() {
+      const { displayTables, displayConnections, displayOrphanIds } = getDisplay();
+      renderSidebar(
+        dom2.sidebar,
+        displayTables,
+        state.focused,
+        (id) => setFocus(state.focused === id ? null : id),
+        displayOrphanIds
+      );
+      renderCards(dom2.canvasContent, displayTables, state.positions, displayOrphanIds, state.editMode);
+      attachCardBehaviors(
+        dom2.canvasContent,
+        state.positions,
+        {
+          onAddField: (tableId, rowEl) => startFieldDraft(tableId, rowEl),
+          onRemoveStagedTable: (tableId) => removeStagedTableAndRerender(tableId),
+          onRemoveStagedField: (tableId, fieldName) => removeStagedFieldAndRerender(tableId, fieldName),
+          onLinkDragStart: (tableId, clientX, clientY) => startLinkDrag(tableId, clientX, clientY),
+          onCardMoved: () => {
+            renderWires(dom2.wires, displayConnections, state.positions);
+            updateWireVisibility(dom2.wires, displayConnections, state);
+            applyFocusStyles(dom2.canvasContent, displayConnections, state.focused);
+          },
+          onCardToggled: (id) => setFocus(state.focused === id ? null : id),
+          onFieldHover: (row) => {
+            const table = tableById(displayTables, row.dataset.table);
+            const field = table.fields.find((f) => f.name === row.dataset.field);
+            tooltip.show(field, table.id);
+          },
+          onFieldMove: (event) => tooltip.move(event),
+          onFieldLeave: () => tooltip.hide(),
+          onRefEnter: (row) => {
+            state.hoveredConn = `${row.dataset.table}.${row.dataset.field}`;
+            updateWireVisibility(dom2.wires, displayConnections, state);
+          },
+          onRefLeave: () => {
+            state.hoveredConn = null;
+            updateWireVisibility(dom2.wires, displayConnections, state);
+          },
+          onRefJump: (targetId) => jumpTo(targetId),
+          onTableHover: (tableId) => tooltip.showTable(tableById(displayTables, tableId)),
+          onTableMove: (event) => tooltip.move(event),
+          onTableLeave: () => tooltip.hide()
+        },
+        () => state.zoom
+      );
+      renderWires(dom2.wires, displayConnections, state.positions);
+      updateWireVisibility(dom2.wires, displayConnections, state);
+      applyFocusStyles(dom2.canvasContent, displayConnections, state.focused);
+      updateStagingToolbar();
+      updateEmptyStateOverlay();
+    }
+    async function refreshFromGrist() {
+      const freshTables = markBrokenReferences(await loadFromGrist());
+      freshTables.forEach((t) => {
+        if (!state.positions[t.id]) {
+          state.positions[t.id] = { x: t.x, y: t.y };
+          state.defaultPositions[t.id] = { x: t.x, y: t.y };
+        }
+      });
+      tables.length = 0;
+      tables.push(...freshTables);
+      dom2.statTables.textContent = String(tables.length);
+      dom2.statFields.textContent = String(tables.reduce((n, t) => n + t.fields.length, 0));
+      dom2.statLinks.textContent = String(buildConnections(tables).length);
+      renderAll();
+    }
+    function scrollToCard(tableId) {
+      const card = dom2.canvasContent.querySelector(`.table-card[data-id="${CSS.escape(tableId)}"]`);
+      if (card) card.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    }
+    function jumpTo(tableId) {
+      setFocus(tableId);
+      scrollToCard(tableId);
+    }
+    function jumpToField(tableId, fieldName) {
+      setFocus(tableId);
+      const row = dom2.canvasContent.querySelector(
+        `.table-card[data-id="${CSS.escape(tableId)}"] .field-row[data-field="${CSS.escape(fieldName)}"]`
+      );
+      if (!row) {
+        scrollToCard(tableId);
+        return;
+      }
+      row.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+      row.classList.remove("is-jump-target");
+      void row.offsetWidth;
+      row.classList.add("is-jump-target");
+      row.addEventListener("animationend", () => row.classList.remove("is-jump-target"), { once: true });
+    }
+    function setFocus(id) {
+      state.focused = id;
+      if (id) {
+        dom2.focusBanner.classList.add("is-visible");
+        dom2.focusName.textContent = id;
+      } else {
+        dom2.focusBanner.classList.remove("is-visible");
+      }
+      const { displayTables, displayConnections, displayOrphanIds } = getDisplay();
+      applyFocusStyles(dom2.canvasContent, displayConnections, state.focused);
+      updateWireVisibility(dom2.wires, displayConnections, state);
+      renderSidebar(
+        dom2.sidebar,
+        displayTables,
+        state.focused,
+        (rowId) => setFocus(state.focused === rowId ? null : rowId),
+        displayOrphanIds
+      );
+    }
+    function setEditMode(on) {
+      state.editMode = on;
+      dom2.editModeToggle.classList.toggle("is-active", on);
+      dom2.editModeToggle.setAttribute("aria-pressed", String(on));
+      dom2.editModeBanner.classList.toggle("is-visible", on);
+      if (!on) activeDraftCancel?.();
+      renderAll();
+    }
+    dom2.editModeToggle.addEventListener("click", () => setEditMode(!state.editMode));
+    let activeDraftCancel = null;
+    function setActiveDraft(cancelFn) {
+      activeDraftCancel = cancelFn;
+      dom2.canvasContent.classList.add("is-drafting");
+      dom2.newTableBtn.disabled = true;
+    }
+    function clearActiveDraft() {
+      activeDraftCancel = null;
+      dom2.canvasContent.classList.remove("is-drafting");
+      dom2.newTableBtn.disabled = false;
+    }
+    function startNewTableDraft() {
+      if (activeDraftCancel) return;
+      const rect = dom2.canvasWrap.getBoundingClientRect();
+      const zoom = state.zoom || 1;
+      const cascade = state.staging.tables.length * 60;
+      const x = Math.max(0, (dom2.canvasWrap.scrollLeft + rect.width / 2) / zoom - CARD_W / 2) + cascade;
+      const y = Math.max(0, (dom2.canvasWrap.scrollTop + rect.height / 2) / zoom - 40) + cascade;
+      const card = createDraftTableCard({ x, y });
+      dom2.canvasContent.appendChild(card);
+      setActiveDraft(cancelDraftTable);
+      const input = card.querySelector(".draft-name-input");
+      const addBtn = card.querySelector(".draft-create");
+      const cancelBtn = card.querySelector(".draft-cancel");
+      const errorEl = card.querySelector(".draft-error");
+      input.addEventListener("input", () => {
+        addBtn.disabled = sanitizeLabel(input.value).length === 0;
+      });
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !addBtn.disabled) addToStage();
+        if (e.key === "Escape") cancelDraftTable();
+      });
+      cancelBtn.addEventListener("click", () => cancelDraftTable());
+      addBtn.addEventListener("click", addToStage);
+      input.focus();
+      function cancelDraftTable() {
+        card.remove();
+        clearActiveDraft();
+      }
+      function addToStage() {
+        const name = sanitizeLabel(input.value);
+        if (!name) return;
+        const error = validateNewTableName(state.staging, tables, name);
+        if (error) {
+          errorEl.hidden = false;
+          errorEl.textContent = error;
+          return;
+        }
+        state.staging = addStagedTable(state.staging, name);
+        state.positions[name] = { x, y };
+        state.defaultPositions[name] = { x, y };
+        cancelDraftTable();
+        renderAll();
+      }
+    }
+    dom2.newTableBtn.addEventListener("click", () => startNewTableDraft());
+    function startFieldDraft(tableId, addRowEl) {
+      if (activeDraftCancel) return;
+      const owner = isStagedTableName(state.staging, tableId) ? { kind: "staged", id: tableId } : { kind: "real", id: tableId };
+      const row = createDraftFieldRow();
+      addRowEl.insertAdjacentElement("beforebegin", row);
+      addRowEl.hidden = true;
+      const card = addRowEl.closest(".table-card");
+      if (card) card.style.zIndex = "20";
+      setActiveDraft(cancelFieldDraft);
+      const nameInput = row.querySelector(".draft-field-name");
+      const typeSelect = row.querySelector(".draft-field-type");
+      const choicesInput = row.querySelector(".draft-field-choices");
+      const addBtn = row.querySelector(".draft-field-create");
+      const cancelBtn = row.querySelector(".draft-field-cancel");
+      const errorEl = row.querySelector(".draft-field-error");
+      function updateChoicesVisibility() {
+        choicesInput.hidden = !isChoiceLikeType(typeSelect.value);
+      }
+      nameInput.addEventListener("input", () => {
+        addBtn.disabled = sanitizeLabel(nameInput.value).length === 0;
+      });
+      nameInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !addBtn.disabled) addToStage();
+        if (e.key === "Escape") cancelFieldDraft();
+      });
+      typeSelect.addEventListener("change", updateChoicesVisibility);
+      choicesInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !addBtn.disabled) addToStage();
+        if (e.key === "Escape") cancelFieldDraft();
+      });
+      cancelBtn.addEventListener("click", () => cancelFieldDraft());
+      addBtn.addEventListener("click", addToStage);
+      nameInput.focus();
+      function cancelFieldDraft() {
+        row.remove();
+        addRowEl.hidden = false;
+        if (card) card.style.zIndex = "";
+        clearActiveDraft();
+      }
+      function addToStage() {
+        const name = sanitizeLabel(nameInput.value);
+        if (!name) return;
+        const error = validateNewFieldName(state.staging, tables, owner, name);
+        if (error) {
+          errorEl.hidden = false;
+          errorEl.textContent = error;
+          return;
+        }
+        const type = typeSelect.value;
+        const choices = isChoiceLikeType(type) ? parseChoiceOptions(choicesInput.value) : [];
+        state.staging = addStagedField(state.staging, owner, { name, type, choices });
+        cancelFieldDraft();
+        renderAll();
+      }
+    }
+    function removeStagedTableAndRerender(tableId) {
+      state.staging = removeStagedTable(state.staging, tableId);
+      renderAll();
+    }
+    function removeStagedFieldAndRerender(tableId, fieldName) {
+      const owner = isStagedTableName(state.staging, tableId) ? { kind: "staged", id: tableId } : { kind: "real", id: tableId };
+      state.staging = removeStagedField(state.staging, owner, fieldName);
+      renderAll();
+    }
+    let linkDragState = null;
+    function startLinkDrag(sourceId, clientX, clientY) {
+      if (activeDraftCancel) return;
+      const path = document.createElementNS(SVG_NS2, "path");
+      path.classList.add("wire", "is-drawing");
+      dom2.wires.appendChild(path);
+      linkDragState = { sourceId, path };
+      updateLinkDragPath(clientX, clientY);
+    }
+    function updateLinkDragPath(clientX, clientY) {
+      if (!linkDragState) return;
+      const rect = dom2.canvasWrap.getBoundingClientRect();
+      const a = tableAnchor(state.positions, linkDragState.sourceId, 0);
+      const b = canvasPointFromClient(
+        clientX,
+        clientY,
+        rect,
+        dom2.canvasWrap.scrollLeft,
+        dom2.canvasWrap.scrollTop,
+        state.zoom || 1
+      );
+      linkDragState.path.setAttribute("d", elbowPath(a, b));
+    }
+    function cancelLinkDrag() {
+      if (!linkDragState) return;
+      linkDragState.path.remove();
+      linkDragState = null;
+    }
+    window.addEventListener("mousemove", (e) => {
+      if (!linkDragState) return;
+      updateLinkDragPath(e.clientX, e.clientY);
+    });
+    window.addEventListener("mouseup", (e) => {
+      if (!linkDragState) return;
+      const { sourceId, path } = linkDragState;
+      path.remove();
+      linkDragState = null;
+      const targetCard = e.target.closest(".table-card");
+      if (!targetCard) return;
+      openLinkDraft(sourceId, targetCard.dataset.id);
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") cancelLinkDrag();
+    });
+    function targetFieldNames(targetId) {
+      if (isStagedTableName(state.staging, targetId)) {
+        return stagedFieldsForOwner(state.staging, "staged", targetId).map((f) => f.name);
+      }
+      const table = tableById(tables, targetId);
+      return table ? table.fields.map((f) => f.name) : [];
+    }
+    function openLinkDraft(sourceId, targetId) {
+      showLinkDraftDialog(dom2, {
+        sourceLabel: sourceId,
+        targetLabel: targetId,
+        defaultName: targetId,
+        displayFieldOptions: targetFieldNames(targetId),
+        onSubmit: (rawName, type, displayField) => {
+          const name = sanitizeLabel(rawName);
+          if (!name) return { error: "Le nom du champ ne peut pas \xEAtre vide." };
+          const owner = isStagedTableName(state.staging, sourceId) ? { kind: "staged", id: sourceId } : { kind: "real", id: sourceId };
+          const error = validateNewFieldName(state.staging, tables, owner, name);
+          if (error) return { error };
+          const ref = isStagedTableName(state.staging, targetId) ? { kind: "staged", id: targetId } : { kind: "real", id: targetId };
+          state.staging = addStagedField(state.staging, owner, { name, type, ref, displayField });
+          renderAll();
+        }
+      });
+    }
+    function commitSchema() {
+      if (isStagingEmpty(state.staging)) return;
+      const summary = buildSchemaSummaryText(state.staging);
+      showConfirmDialog(dom2, {
+        message: isLiveGrist ? `Valider ce sch\xE9ma dans le document Grist ?
+
+${summary}` : `Simuler la validation de ce sch\xE9ma ? Hors document Grist ici : rien n'est \xE9crit, c'est un aper\xE7u local.
+
+${summary}`,
+        confirmLabel: "Valider",
+        onConfirm: () => submitSchema()
+      });
+    }
+    function applyStagingLocally(staging) {
+      staging.tables.forEach((t) => {
+        tables.push({ id: t.name, group: t.group, fields: [] });
+        state.positions[t.name] = state.positions[t.name] || { x: 0, y: 0 };
+        state.defaultPositions[t.name] = state.defaultPositions[t.name] || { x: 0, y: 0 };
+      });
+      staging.fields.forEach((f) => {
+        const table = tableById(tables, f.owner.id);
+        if (!table) return;
+        const field = { name: f.name, type: f.type };
+        if (f.ref) field.ref = f.ref.id;
+        if (f.choices && f.choices.length) field.choices = f.choices;
+        table.fields.push(field);
+      });
+      dom2.statTables.textContent = String(tables.length);
+      dom2.statFields.textContent = String(tables.reduce((n, t) => n + t.fields.length, 0));
+      dom2.statLinks.textContent = String(buildConnections(tables).length);
+    }
+    async function submitSchema() {
+      const stagingSnapshot = state.staging;
+      if (!isLiveGrist) {
+        applyStagingLocally(stagingSnapshot);
+        state.staging = createStagingState();
+        renderAll();
+        showToast("Sch\xE9ma ajout\xE9 (simulation locale, hors document Grist).");
+        return;
+      }
+      dom2.commitSchemaBtn.disabled = true;
+      dom2.discardStagingBtn.disabled = true;
+      let phase = "tables";
+      try {
+        const tableActions = buildAddTableActions(stagingSnapshot);
+        let resolvedFields = stagingSnapshot.fields;
+        let resolvedTableNames = {};
+        if (tableActions.length) {
+          const { tableRows: beforeRows } = await fetchRawGristMetadata();
+          await applyActionsToGrist(tableActions);
+          const { tableRows: afterRows } = await fetchRawGristMetadata();
+          resolvedTableNames = resolveStagedTableNames(stagingSnapshot.tables, beforeRows, afterRows);
+          resolvedFields = resolveStagedFieldReferences(stagingSnapshot.fields, resolvedTableNames);
+        }
+        state.staging = { tables: [], fields: resolvedFields };
+        phase = "champs";
+        const columnActions = buildAddColumnActions({ fields: resolvedFields });
+        if (columnActions.length) await applyActionsToGrist(columnActions);
+        state.staging = createStagingState();
+        let extraStepsWarning = "";
+        try {
+          const { tableRows, columnRows } = await fetchRawGristMetadata();
+          const visibleColActions = buildVisibleColActions({ fields: resolvedFields }, tableRows, columnRows);
+          if (visibleColActions.length) await applyActionsToGrist(visibleColActions);
+          const rawDataSectionByTableRef = await fetchRawDataSectionsByTableRef();
+          const rawDataFieldActions = buildRawDataFieldActions(
+            resolvedFields,
+            tableRows,
+            columnRows,
+            rawDataSectionByTableRef
+          );
+          if (rawDataFieldActions.length) await applyActionsToGrist(rawDataFieldActions);
+        } catch (extraStepsErr) {
+          extraStepsWarning = " (certains r\xE9glages annexes \u2014 colonne \xE0 afficher des liaisons, visibilit\xE9 dans Donn\xE9es brutes \u2014 n'ont pas pu \xEAtre appliqu\xE9s automatiquement ; v\xE9rifie dans Grist si besoin.)";
+        }
+        await refreshFromGrist();
+        const { missingTables, missingFields } = findMissingSchemaItems(
+          { tables: stagingSnapshot.tables, fields: resolvedFields },
+          tables,
+          resolvedTableNames
+        );
+        if (missingTables.length === 0 && missingFields.length === 0) {
+          showToast(`Sch\xE9ma valid\xE9 \u2014 tout appara\xEEt bien dans le document.${extraStepsWarning}`);
+        } else {
+          const parts = [];
+          if (missingTables.length) parts.push(`tables : ${missingTables.join(", ")}`);
+          if (missingFields.length) parts.push(`champs : ${missingFields.join(", ")}`);
+          showToast(
+            `Sch\xE9ma envoy\xE9, mais certains \xE9l\xE9ments n'apparaissent pas tels quels (${parts.join(" ; ")}) \u2014 v\xE9rifie dans Grist.`
+          );
+        }
+      } catch (err) {
+        const message = err && err.message ? err.message : err;
+        if (phase === "tables") {
+          showToast(`\xC9chec de la cr\xE9ation des tables : ${message} \u2014 le brouillon est conserv\xE9, rien n'a \xE9t\xE9 \xE9crit.`);
+        } else {
+          showToast(
+            `Les tables ont \xE9t\xE9 cr\xE9\xE9es, mais l'ajout des colonnes a \xE9chou\xE9 : ${message} \u2014 le brouillon des champs est conserv\xE9, tu peux r\xE9essayer.`
+          );
+          try {
+            await refreshFromGrist();
+          } catch {
+          }
+        }
+      } finally {
+        dom2.commitSchemaBtn.disabled = false;
+        dom2.discardStagingBtn.disabled = false;
+        renderAll();
+      }
+    }
+    function discardStaging() {
+      if (isStagingEmpty(state.staging)) return;
+      state.staging = createStagingState();
+      renderAll();
+    }
+    dom2.commitSchemaBtn.addEventListener("click", () => commitSchema());
+    dom2.discardStagingBtn.addEventListener("click", () => discardStaging());
+    dom2.search.addEventListener("input", (e) => {
+      state.search = e.target.value;
+      const { displayTables } = getDisplay();
+      applySearchToCards(dom2.canvasContent, displayTables, state.search);
+      applySidebarSearch(dom2.sidebar, displayTables, state.search);
+    });
+    dom2.modeFocusBtn.addEventListener("click", () => {
+      state.showAll = false;
+      dom2.modeFocusBtn.classList.add("active");
+      dom2.modeAllBtn.classList.remove("active");
+      updateWireVisibility(dom2.wires, getDisplay().displayConnections, state);
+    });
+    dom2.modeAllBtn.addEventListener("click", () => {
+      state.showAll = true;
+      dom2.modeAllBtn.classList.add("active");
+      dom2.modeFocusBtn.classList.remove("active");
+      updateWireVisibility(dom2.wires, getDisplay().displayConnections, state);
+    });
+    dom2.focusClear.addEventListener("click", () => setFocus(null));
+    dom2.resetLayout.addEventListener("click", () => {
+      const positions = resetPositions(state);
+      dom2.canvasContent.querySelectorAll(".table-card").forEach((card) => {
+        const pos = positions[card.dataset.id];
+        if (!pos) return;
+        card.style.left = `${pos.x}px`;
+        card.style.top = `${pos.y}px`;
+      });
+      const { displayConnections } = getDisplay();
+      renderWires(dom2.wires, displayConnections, state.positions);
+      applyFocusStyles(dom2.canvasContent, displayConnections, state.focused);
+      fitToView();
+    });
+    dom2.canvasContent.addEventListener("mousedown", (e) => {
+      if (e.target === dom2.canvasContent || e.target === dom2.wires) setFocus(null);
+    });
+    dom2.zoomIn.addEventListener("click", () => setZoom(state.zoom * ZOOM_STEP));
+    dom2.zoomOut.addEventListener("click", () => setZoom(state.zoom / ZOOM_STEP));
+    dom2.zoomLevel.addEventListener("click", () => setZoom(1));
+    dom2.zoomFit.addEventListener("click", () => fitToView());
+    dom2.canvasWrap.addEventListener(
+      "wheel",
+      (e) => {
+        if (!e.ctrlKey && !e.metaKey) return;
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+        setZoomAround(state.zoom * factor, e.clientX, e.clientY);
+      },
+      { passive: false }
+    );
+    renderAll();
+    if (dom2.canvasWrap.clientWidth > 0 && dom2.canvasWrap.clientHeight > 0) {
+      fitToView();
+    } else {
+      const observer = new ResizeObserver(() => {
+        if (dom2.canvasWrap.clientWidth > 0 && dom2.canvasWrap.clientHeight > 0) {
+          observer.disconnect();
+          fitToView();
+        }
+      });
+      observer.observe(dom2.canvasWrap);
+    }
+    return { state, setFocus };
   }
 
   // src/data/resolveSource.js
@@ -1243,6 +2084,26 @@
     focusBanner: byId("focus-banner"),
     focusName: byId("focus-name"),
     focusClear: byId("focus-clear"),
+    editModeToggle: byId("edit-mode-toggle"),
+    editModeBanner: byId("edit-mode-banner"),
+    newTableBtn: byId("new-table-btn"),
+    stagingCount: byId("staging-count"),
+    discardStagingBtn: byId("discard-staging-btn"),
+    commitSchemaBtn: byId("commit-schema-btn"),
+    confirmDialog: byId("confirm-dialog"),
+    confirmMessage: byId("confirm-message"),
+    confirmConfirmBtn: byId("confirm-confirm"),
+    confirmCancelBtn: byId("confirm-cancel"),
+    linkDraftDialog: byId("link-draft-dialog"),
+    linkDraftSource: byId("link-draft-source"),
+    linkDraftTarget: byId("link-draft-target"),
+    linkDraftName: byId("link-draft-name"),
+    linkDraftType: byId("link-draft-type"),
+    linkDraftDisplayCol: byId("link-draft-display-col"),
+    linkDraftError: byId("link-draft-error"),
+    linkDraftConfirmBtn: byId("link-draft-confirm"),
+    linkDraftCancelBtn: byId("link-draft-cancel"),
+    toast: byId("toast"),
     legend: byId("legend"),
     legendToggle: byId("legend-toggle"),
     legendBody: byId("legend-body"),
@@ -1266,7 +2127,7 @@
     loadErrorEl.classList.add("is-visible");
   }
   async function resolveTables() {
-    if (!isInIframe(window)) return TABLES;
+    if (!isInIframe(window)) return { tables: TABLES, isLiveGrist: false };
     const origin = detectParentOrigin(window);
     if (!origin) {
       throw new Error(
@@ -1277,16 +2138,17 @@
     try {
       await loadGristPluginApi(origin);
       window.grist.ready({ requiredAccess: "full" });
-      return await withTimeout(
+      const tables = await withTimeout(
         loadFromGrist(),
         GRIST_LOAD_TIMEOUT_MS,
         "Le document Grist met trop de temps \xE0 r\xE9pondre."
       );
+      return { tables, isLiveGrist: true };
     } finally {
       showLoading(false);
     }
   }
-  resolveTables().then((tables) => initApp(dom, tables)).catch((err) => {
+  resolveTables().then(({ tables, isLiveGrist }) => initApp(dom, tables, { isLiveGrist })).catch((err) => {
     console.error(err);
     showLoadError(
       "V\xE9rifie que l'acc\xE8s complet au document a bien \xE9t\xE9 autoris\xE9 pour ce widget, puis recharge la page."
