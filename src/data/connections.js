@@ -52,7 +52,7 @@ function mergeReverseFieldPairs(rawConnections) {
         bidirectional: true
       });
     } else {
-      merged.push({ key: c.key, from: c.from, fieldIndex: c.fieldIndex, to: c.to, kind: c.kind });
+      merged.push({ key: c.key, from: c.from, fieldIndex: c.fieldIndex, to: c.to, kind: c.kind, isStaged: c.isStaged });
     }
   });
 
@@ -78,7 +78,8 @@ export function buildConnections(tables) {
           fieldIndex,
           to: f.ref,
           kind: f.type,
-          reverseField: f.reverseField
+          reverseField: f.reverseField,
+          isStaged: f.isStaged
         });
       }
     });
