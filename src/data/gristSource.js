@@ -108,9 +108,41 @@ export function buildTablesFromGristMetadata(tableRows, columnRows) {
 // Nécessite un accès complet (grist.ready({ requiredAccess: "full" }) déjà
 // appelé ailleurs) puisqu'on lit des tables autres que celle liée au widget.
 export async function loadFromGrist() {
+  const { tableRows, columnRows } = await fetchRawGristMetadata();
+  return buildTablesFromGristMetadata(tableRows, columnRows);
+}
+
+// Variante qui renvoie les lignes brutes (avec leurs id internes) plutôt que
+// le schéma déjà remis en forme pour le widget — utilisée par le mode
+// édition (V3) pour résoudre visibleCol après la création d'une liaison :
+// cette action a besoin de l'id interne de colonne, pas juste de son colId.
+export async function fetchRawGristMetadata() {
   const [tableColValues, columnColValues] = await Promise.all([
     window.grist.docApi.fetchTable("_grist_Tables"),
     window.grist.docApi.fetchTable("_grist_Tables_column")
   ]);
-  return buildTablesFromGristMetadata(toRecords(tableColValues), toRecords(columnColValues));
+  return { tableRows: toRecords(tableColValues), columnRows: toRecords(columnColValues) };
+}
+
+// Retrouve, pour chaque table (par son id interne), la section "Données
+// brutes" (Raw Data) que Grist crée automatiquement avec elle — c'est la
+// seule page systématiquement présente et non personnalisable, donc la plus
+// fiable à cibler pour qu'une colonne tout juste créée soit visible quelque
+// part sans étape manuelle (voir buildRawDataFieldActions). Vérifié en
+// pratique (document de test) : une colonne ajoutée via AddColumn n'apparaît
+// automatiquement dans AUCUNE vue existante, pas même celle-ci — Grist ne le
+// fait que lorsqu'on ajoute la colonne à la main depuis son interface.
+export async function fetchRawDataSectionsByTableRef() {
+  const [viewColValues, sectionColValues] = await Promise.all([
+    window.grist.docApi.fetchTable("_grist_Views"),
+    window.grist.docApi.fetchTable("_grist_Views_section")
+  ]);
+  const viewRows = toRecords(viewColValues);
+  const sectionRows = toRecords(sectionColValues);
+  const rawDataViewIds = new Set(viewRows.filter((v) => v.type === "raw_data").map((v) => v.id));
+  const byTableRef = new Map();
+  sectionRows.forEach((s) => {
+    if (rawDataViewIds.has(s.parentId)) byTableRef.set(s.tableRef, s.id);
+  });
+  return byTableRef;
 }

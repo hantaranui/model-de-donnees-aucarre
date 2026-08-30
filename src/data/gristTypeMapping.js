@@ -35,3 +35,40 @@ export function mapGristType(rawType) {
       return { type: "text" };
   }
 }
+
+// Mapping inverse de mapGristType, utilisé par le mode édition (V3) pour
+// traduire le type choisi dans le widget vers la chaîne de type brute
+// attendue par AddColumn. Ref/RefList ne sont volontairement pas ici : ces
+// types se créent en traçant une liaison sur le canvas (étape dédiée), pas
+// depuis ce sélecteur de type simple.
+const GRIST_TYPE_BY_KEY = {
+  text: "Text",
+  numeric: "Numeric",
+  int: "Int",
+  bool: "Bool",
+  date: "Date",
+  // Fuseau horaire non demandé à l'utilisateur pour rester simple : à
+  // vérifier contre un vrai document (le fuseau du document lui-même serait
+  // sans doute plus juste qu'un UTC fixe, pas confirmé en pratique).
+  datetime: "DateTime:Etc/UTC",
+  choice: "Choice",
+  choicelist: "ChoiceList",
+  attachment: "Attachments"
+};
+
+export function buildGristTypeString(type) {
+  const rawType = GRIST_TYPE_BY_KEY[type];
+  if (!rawType) throw new Error(`Type de champ non pris en charge pour la création : ${type}`);
+  return rawType;
+}
+
+// Pendant du mapping inverse ci-dessus, mais pour les liaisons (tracées sur
+// le canvas, pas choisies dans le sélecteur de type simple) : construit
+// "Ref:Cible" / "RefList:Cible" à partir du nom réel de la table cible.
+export function buildGristRefTypeString(type, targetTableName) {
+  if (type !== "ref" && type !== "reflist") {
+    throw new Error(`Type de liaison non pris en charge : ${type}`);
+  }
+  const prefix = type === "reflist" ? "RefList" : "Ref";
+  return `${prefix}:${targetTableName}`;
+}
