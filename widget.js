@@ -1349,6 +1349,681 @@
     return byTableRef;
   }
 
+<<<<<<< HEAD
+  // src/data/schemaExport.js
+  var SCHEMA_EXPORT_VERSION = 1;
+  function parseWidgetOptions(raw) {
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" && Object.keys(parsed).length ? parsed : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function buildSchemaExport(tableRows, columnRows, docName) {
+    const tableIdById = new Map(tableRows.map((t) => [t.id, t.tableId]));
+    const columnsById = new Map(columnRows.map((c) => [c.id, c]));
+    const tables = tableRows.filter((t) => !t.summarySourceTable && !String(t.tableId).startsWith("_grist_")).map((t) => {
+      const columns = columnRows.filter((c) => c.parentId === t.id && !isHiddenColumn(c.colId)).sort((a, b) => a.parentPos - b.parentPos).map((c) => {
+        const gristType = c.type || "Any";
+        const sep = gristType.indexOf(":");
+        const baseType = sep === -1 ? gristType : gristType.slice(0, sep);
+        const column = { id: c.colId, label: c.label || c.colId, type: baseType, gristType };
+        if (baseType === "Ref" || baseType === "RefList") {
+          const displayCol = c.visibleCol ? columnsById.get(c.visibleCol) : null;
+          const ref = {
+            table: sep === -1 ? null : gristType.slice(sep + 1),
+            visibleCol: displayCol ? displayCol.colId : null
+          };
+          const reverseCol = c.reverseCol ? columnsById.get(c.reverseCol) : null;
+          const reverseTable = reverseCol ? tableIdById.get(reverseCol.parentId) : null;
+          if (reverseCol && reverseTable) ref.reverse = { table: reverseTable, column: reverseCol.colId };
+          column.ref = ref;
+        }
+        if (baseType === "DateTime" && sep !== -1) column.timezone = gristType.slice(sep + 1);
+        column.isFormula = !!c.isFormula;
+        if (c.formula) column.formula = c.formula;
+        if (c.description) column.description = c.description;
+        const widgetOptions = parseWidgetOptions(c.widgetOptions);
+        if (widgetOptions) column.widgetOptions = widgetOptions;
+        return column;
+      });
+      const table = { id: t.tableId, columns };
+      if (t.description) table.description = t.description;
+      return table;
+    });
+    return {
+      schemaVersion: SCHEMA_EXPORT_VERSION,
+      exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      source: { name: docName || "" },
+      tables
+    };
+  }
+  function slugifyFileName(name) {
+    const slug = String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase();
+    return slug || "document";
+  }
+  function downloadJsonFile(data, fileName) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1e3);
+  }
+
+  // src/data/schemaImport.js
+  var IMPORT_MAX_BYTES = 5 * 1024 * 1024;
+  var IMPORT_ALLOWED_TYPES = /* @__PURE__ */ new Set([
+    "Any", "Text", "Numeric", "Int", "Bool", "Date", "DateTime",
+    "Choice", "ChoiceList", "Attachments", "Ref", "RefList"
+  ]);
+  var IMPORT_ID_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+  var IMPORT_TYPE_LABELS = {
+    Any: "Libre", Text: "Texte", Numeric: "Num\u00E9rique", Int: "Entier", Bool: "Bool\u00E9en",
+    Date: "Date", DateTime: "Date et heure", Choice: "Choix", ChoiceList: "Choix multiple",
+    Attachments: "Pi\u00E8ces jointes", Ref: "R\u00E9f\u00E9rence", RefList: "R\u00E9f\u00E9rence multiple"
+  };
+  var IMPORT_PHASE_LABELS = {
+    tables: "cr\u00E9ation des tables",
+    colonnes: "ajout des colonnes",
+    modifications: "modification des colonnes"
+  };
+  function importPlural(n, one, many) {
+    return n > 1 ? many : one;
+  }
+  function importIsRefType(baseType) {
+    return baseType === "Ref" || baseType === "RefList";
+  }
+  function importSplitType(gristType) {
+    const sep = gristType.indexOf(":");
+    return {
+      baseType: sep === -1 ? gristType : gristType.slice(0, sep),
+      suffix: sep === -1 ? null : gristType.slice(sep + 1)
+    };
+  }
+  function importedGristType(col) {
+    if (typeof col.gristType === "string" && col.gristType) return col.gristType;
+    if (importIsRefType(col.type) && col.ref && typeof col.ref.table === "string" && col.ref.table) {
+      return `${col.type}:${col.ref.table}`;
+    }
+    return col.type;
+  }
+  function importStableStringify(value) {
+    if (Array.isArray(value)) return `[${value.map(importStableStringify).join(",")}]`;
+    if (value && typeof value === "object") {
+      return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${importStableStringify(value[k])}`).join(",")}}`;
+    }
+    return JSON.stringify(value === void 0 ? null : value);
+  }
+  function importTruncate(text, max) {
+    const s = String(text).replace(/\s+/g, " ").trim();
+    return s.length > max ? `${s.slice(0, max - 1)}\u2026` : s;
+  }
+  function parseSchemaImport(text) {
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      return { ok: false, problems: ["Le fichier n'est pas un JSON valide."] };
+    }
+    if (!data || typeof data !== "object" || Array.isArray(data) || !Array.isArray(data.tables)) {
+      return { ok: false, problems: ["Ce fichier n'est pas un export du mod\u00E8le de donn\u00E9es (liste \u00AB tables \u00BB absente)."] };
+    }
+    if (!Number.isInteger(data.schemaVersion) || data.schemaVersion < 1) {
+      return { ok: false, problems: ["Ce fichier n'est pas un export du mod\u00E8le de donn\u00E9es (\u00AB schemaVersion \u00BB absent ou invalide)."] };
+    }
+    if (data.schemaVersion > SCHEMA_EXPORT_VERSION) {
+      return { ok: false, problems: [`Ce fichier utilise une version plus r\u00E9cente du format (v${data.schemaVersion}) que ce widget (v${SCHEMA_EXPORT_VERSION}). Mets le widget \u00E0 jour.`] };
+    }
+    const problems = [];
+    const seenTables = /* @__PURE__ */ new Set();
+    const tables = [];
+    data.tables.forEach((t, ti) => {
+      if (!t || typeof t !== "object" || typeof t.id !== "string" || !IMPORT_ID_PATTERN.test(t.id)) {
+        problems.push(`Table n\u00B0${ti + 1} : identifiant absent ou invalide.`);
+        return;
+      }
+      if (t.id.startsWith("_grist_")) return;
+      if (seenTables.has(t.id)) {
+        problems.push(`Table \u00AB ${t.id} \u00BB pr\u00E9sente en double.`);
+        return;
+      }
+      seenTables.add(t.id);
+      if (!Array.isArray(t.columns)) {
+        problems.push(`Table \u00AB ${t.id} \u00BB : liste de colonnes absente.`);
+        return;
+      }
+      const seenCols = /* @__PURE__ */ new Set();
+      const columns = [];
+      t.columns.forEach((c, ci) => {
+        if (!c || typeof c !== "object" || typeof c.id !== "string" || !IMPORT_ID_PATTERN.test(c.id)) {
+          problems.push(`Table \u00AB ${t.id} \u00BB, colonne n\u00B0${ci + 1} : identifiant absent ou invalide.`);
+          return;
+        }
+        if (isHiddenColumn(c.id)) return;
+        if (c.id === "id") {
+          problems.push(`\u00AB ${t.id}.id \u00BB : identifiant r\u00E9serv\u00E9 par Grist.`);
+          return;
+        }
+        if (seenCols.has(c.id)) {
+          problems.push(`\u00AB ${t.id}.${c.id} \u00BB pr\u00E9sente en double.`);
+          return;
+        }
+        seenCols.add(c.id);
+        const gristType = importedGristType(c);
+        const { baseType, suffix } = typeof gristType === "string" ? importSplitType(gristType) : { baseType: "", suffix: null };
+        if (!IMPORT_ALLOWED_TYPES.has(baseType)) {
+          problems.push(`\u00AB ${t.id}.${c.id} \u00BB : type \u00AB ${importTruncate(gristType, 40)} \u00BB non pris en charge.`);
+          return;
+        }
+        let refTable = null;
+        if (importIsRefType(baseType)) {
+          if (!suffix || !IMPORT_ID_PATTERN.test(suffix)) {
+            problems.push(`\u00AB ${t.id}.${c.id} \u00BB : r\u00E9f\u00E9rence sans table cible valide.`);
+            return;
+          }
+          refTable = suffix;
+        }
+        const ref = c.ref && typeof c.ref === "object" ? c.ref : null;
+        const visibleCol = refTable && ref && typeof ref.visibleCol === "string" && IMPORT_ID_PATTERN.test(ref.visibleCol) ? ref.visibleCol : null;
+        const wo = c.widgetOptions && typeof c.widgetOptions === "object" && !Array.isArray(c.widgetOptions) && Object.keys(c.widgetOptions).length ? c.widgetOptions : null;
+        columns.push({
+          id: c.id,
+          label: typeof c.label === "string" && c.label ? c.label : c.id,
+          gristType,
+          baseType,
+          refTable,
+          visibleCol,
+          isFormula: c.isFormula === true,
+          formula: typeof c.formula === "string" ? c.formula : "",
+          description: typeof c.description === "string" ? c.description : "",
+          widgetOptions: wo
+        });
+      });
+      tables.push({ id: t.id, columns });
+    });
+    if (problems.length) return { ok: false, problems };
+    return { ok: true, schema: { docName: data.source && typeof data.source.name === "string" ? data.source.name : "", tables } };
+  }
+  function normalizeCurrentColumn(c, columnsById) {
+    const gristType = c.type || "Any";
+    const { baseType, suffix } = importSplitType(gristType);
+    const displayCol = c.visibleCol ? columnsById.get(c.visibleCol) : null;
+    return {
+      id: c.colId,
+      label: c.label || c.colId,
+      gristType,
+      baseType,
+      refTable: importIsRefType(baseType) ? suffix : null,
+      visibleCol: displayCol ? displayCol.colId : null,
+      isFormula: !!c.isFormula,
+      formula: c.formula || "",
+      description: c.description || "",
+      widgetOptions: parseWidgetOptions(c.widgetOptions)
+    };
+  }
+  function diffImportedColumn(cur, imp) {
+    const diffs = [];
+    let risky = false;
+    if (cur.label !== imp.label) diffs.push({ key: "label", text: `libell\u00E9 \u00AB ${cur.label} \u00BB \u2192 \u00AB ${imp.label} \u00BB` });
+    if (cur.gristType !== imp.gristType) {
+      const structural = cur.baseType !== imp.baseType || cur.refTable !== imp.refTable;
+      if (structural) risky = true;
+      diffs.push({
+        key: "type",
+        text: `type ${cur.gristType} \u2192 ${imp.gristType}${structural ? " (peut convertir ou perdre des valeurs)" : ""}`
+      });
+    }
+    if (cur.isFormula !== imp.isFormula) {
+      if (!cur.isFormula && imp.isFormula) {
+        risky = true;
+        diffs.push({ key: "isFormula", text: "colonne de donn\u00E9es \u2192 colonne formule (les valeurs saisies seraient perdues)" });
+      } else {
+        diffs.push({ key: "isFormula", text: "colonne formule \u2192 colonne de donn\u00E9es" });
+      }
+    }
+    if (cur.formula !== imp.formula) {
+      diffs.push({ key: "formula", text: imp.formula ? `formule : ${importTruncate(imp.formula, 120)}` : "formule supprim\u00E9e" });
+    }
+    if (imp.refTable && cur.visibleCol !== imp.visibleCol) {
+      diffs.push({ key: "visibleCol", text: `colonne affich\u00E9e : ${cur.visibleCol || "(aucune)"} \u2192 ${imp.visibleCol || "(aucune)"}` });
+    }
+    if (importStableStringify(cur.widgetOptions) !== importStableStringify(imp.widgetOptions)) {
+      diffs.push({ key: "widgetOptions", text: "options d'affichage modifi\u00E9es" });
+    }
+    if (cur.description !== imp.description) diffs.push({ key: "description", text: "description modifi\u00E9e" });
+    return { diffs, risky };
+  }
+  function buildImportPlan(schema, tableRows, columnRows) {
+    const columnsById = new Map(columnRows.map((c) => [c.id, c]));
+    const summaryIds = new Set(tableRows.filter((t) => t.summarySourceTable).map((t) => t.tableId));
+    const docTables = /* @__PURE__ */ new Map();
+    tableRows.filter((t) => !t.summarySourceTable && !String(t.tableId).startsWith("_grist_")).forEach((t) => {
+      const cols = /* @__PURE__ */ new Map();
+      columnRows.filter((c) => c.parentId === t.id && !isHiddenColumn(c.colId)).forEach((c) => cols.set(c.colId, normalizeCurrentColumn(c, columnsById)));
+      docTables.set(t.tableId, cols);
+    });
+    const fileTableIds = new Set(schema.tables.map((t) => t.id));
+    const targetExists = (id) => docTables.has(id) || fileTableIds.has(id);
+    const missingTargetReason = (c) => c.refTable && !targetExists(c.refTable) ? `la table cible \u00AB ${c.refTable} \u00BB n'existe ni dans le document ni dans le fichier` : null;
+    const changes = [];
+    let identicalColumns = 0;
+    let docOnlyColumns = 0;
+    schema.tables.forEach((t) => {
+      const docCols = docTables.get(t.id);
+      if (!docCols) {
+        changes.push({
+          id: `t:${t.id}`,
+          kind: "addTable",
+          tableId: t.id,
+          table: t,
+          missingTargets: t.columns.filter((c) => missingTargetReason(c)).map((c) => c.id),
+          blocked: summaryIds.has(t.id) ? `une table r\u00E9capitulative porte d\u00E9j\u00E0 le nom \u00AB ${t.id} \u00BB` : null,
+          selected: !summaryIds.has(t.id)
+        });
+        return;
+      }
+      const fileColIds = new Set(t.columns.map((c) => c.id));
+      docCols.forEach((_, colId) => {
+        if (!fileColIds.has(colId)) docOnlyColumns += 1;
+      });
+      t.columns.forEach((c) => {
+        const cur = docCols.get(c.id);
+        const blocked = missingTargetReason(c);
+        if (!cur) {
+          changes.push({ id: `c:${t.id}.${c.id}`, kind: "addColumn", tableId: t.id, column: c, blocked, selected: !blocked });
+          return;
+        }
+        const { diffs, risky } = diffImportedColumn(cur, c);
+        if (!diffs.length) {
+          identicalColumns += 1;
+          return;
+        }
+        changes.push({
+          id: `m:${t.id}.${c.id}`,
+          kind: "modifyColumn",
+          tableId: t.id,
+          column: c,
+          current: cur,
+          diffs,
+          risky,
+          blocked,
+          selected: !risky && !blocked
+        });
+      });
+    });
+    const docOnlyTables = [...docTables.keys()].filter((id) => !fileTableIds.has(id)).length;
+    const formulaCount = changes.reduce((n, c) => {
+      if (c.kind === "addTable") return n + c.table.columns.filter((col) => col.formula).length;
+      if (c.kind === "addColumn") return n + (c.column.formula ? 1 : 0);
+      return n + (c.diffs.some((d) => d.key === "formula") && c.column.formula ? 1 : 0);
+    }, 0);
+    return { changes, stats: { identicalColumns, docOnlyColumns, docOnlyTables, formulaCount } };
+  }
+  function resolveImportRefType(column, resolvedTableNames) {
+    if (!column.refTable) return column.gristType;
+    return `${column.baseType}:${resolvedTableNames[column.refTable] || column.refTable}`;
+  }
+  function buildImportColOptions(column, resolvedTableNames) {
+    const opts = {
+      type: resolveImportRefType(column, resolvedTableNames),
+      label: column.label,
+      isFormula: column.isFormula
+    };
+    if (column.formula) opts.formula = column.formula;
+    if (column.widgetOptions) opts.widgetOptions = JSON.stringify(column.widgetOptions);
+    if (column.description) opts.description = column.description;
+    return opts;
+  }
+  function buildImportModifyOptions(change, resolvedTableNames) {
+    const col = change.column;
+    const opts = {};
+    change.diffs.forEach((d) => {
+      if (d.key === "label") opts.label = col.label;
+      else if (d.key === "type") opts.type = resolveImportRefType(col, resolvedTableNames);
+      else if (d.key === "isFormula") opts.isFormula = col.isFormula;
+      else if (d.key === "formula") opts.formula = col.formula;
+      else if (d.key === "widgetOptions") opts.widgetOptions = col.widgetOptions ? JSON.stringify(col.widgetOptions) : "";
+      else if (d.key === "description") opts.description = col.description;
+    });
+    return opts;
+  }
+  async function runImportChanges(selected) {
+    const result = { tables: 0, added: 0, modified: 0, warnings: [], extraStepsFailed: false };
+    let phase = "tables";
+    try {
+      const addTables = selected.filter((c) => c.kind === "addTable");
+      let resolved = {};
+      if (addTables.length) {
+        const { tableRows: before } = await fetchRawGristMetadata();
+        await applyActionsToGrist(addTables.map((c) => buildAddTableAction(c.tableId)));
+        const { tableRows: after } = await fetchRawGristMetadata();
+        resolved = resolveStagedTableNames(addTables.map((c) => ({ name: c.tableId })), before, after);
+        result.tables = addTables.length;
+      }
+      const { tableRows: currentTableRows } = await fetchRawGristMetadata();
+      const available = new Set(currentTableRows.map((t) => t.tableId));
+      const targetOf = (column) => resolved[column.refTable] || column.refTable;
+      phase = "colonnes";
+      const toAdd = [];
+      addTables.forEach((c) => {
+        c.table.columns.forEach((col) => toAdd.push({ tableId: resolved[c.tableId] || c.tableId, column: col }));
+      });
+      selected.filter((c) => c.kind === "addColumn").forEach((c) => toAdd.push({ tableId: c.tableId, column: c.column }));
+      const columnActions = [];
+      const added = [];
+      toAdd.forEach(({ tableId, column }) => {
+        if (column.refTable && !available.has(targetOf(column))) {
+          result.warnings.push(`\u00AB ${tableId}.${column.id} \u00BB ignor\u00E9e : la table cible \u00AB ${column.refTable} \u00BB n'est pas disponible.`);
+          return;
+        }
+        columnActions.push(buildAddColumnAction(tableId, column.id, buildImportColOptions(column, resolved)));
+        added.push({ tableId, column });
+      });
+      if (columnActions.length) await applyActionsToGrist(columnActions);
+      result.added = columnActions.length;
+      phase = "modifications";
+      const modifyChanges = selected.filter((c) => {
+        if (c.kind !== "modifyColumn") return false;
+        if (c.column.refTable && !available.has(targetOf(c.column))) {
+          result.warnings.push(`\u00AB ${c.tableId}.${c.column.id} \u00BB non modifi\u00E9e : la table cible \u00AB ${c.column.refTable} \u00BB n'est pas disponible.`);
+          return false;
+        }
+        return true;
+      });
+      const modifyActions = modifyChanges.map((c) => buildModifyColumnAction(c.tableId, c.column.id, buildImportModifyOptions(c, resolved))).filter((a) => Object.keys(a[3]).length > 0);
+      if (modifyActions.length) await applyActionsToGrist(modifyActions);
+      result.modified = modifyChanges.length;
+      try {
+        const { tableRows, columnRows } = await fetchRawGristMetadata();
+        const tableRowIdById = new Map(tableRows.map((t) => [t.tableId, t.id]));
+        const findColRowId = (tableId, colId) => {
+          const tableRowId = tableRowIdById.get(tableId);
+          const col = columnRows.find((c) => c.parentId === tableRowId && c.colId === colId);
+          return col ? col.id : null;
+        };
+        const wanted = added.filter((a) => a.column.refTable && a.column.visibleCol).map((a) => ({ tableId: a.tableId, column: a.column }));
+        modifyChanges.forEach((c) => {
+          if (c.column.refTable && c.diffs.some((d) => d.key === "visibleCol" || d.key === "type")) {
+            wanted.push({ tableId: c.tableId, column: c.column });
+          }
+        });
+        const visibleColActions = [];
+        wanted.forEach(({ tableId, column }) => {
+          if (!column.visibleCol) {
+            visibleColActions.push(buildModifyColumnAction(tableId, column.id, { visibleCol: 0 }));
+            return;
+          }
+          const rowId = findColRowId(targetOf(column), column.visibleCol);
+          if (rowId === null) {
+            result.warnings.push(`\u00AB ${tableId}.${column.id} \u00BB : colonne affich\u00E9e \u00AB ${column.visibleCol} \u00BB introuvable dans \u00AB ${column.refTable} \u00BB.`);
+            return;
+          }
+          visibleColActions.push(buildModifyColumnAction(tableId, column.id, { visibleCol: rowId }));
+        });
+        if (visibleColActions.length) await applyActionsToGrist(visibleColActions);
+        const rawDataSectionByTableRef = await fetchRawDataSectionsByTableRef();
+        const rawDataFieldActions = buildRawDataFieldActions(
+          added.map((a) => ({ owner: { id: a.tableId }, name: a.column.label })),
+          tableRows,
+          columnRows,
+          rawDataSectionByTableRef
+        );
+        if (rawDataFieldActions.length) await applyActionsToGrist(rawDataFieldActions);
+      } catch (extraErr) {
+        result.extraStepsFailed = true;
+      }
+      return result;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err && err.message ? err.message : err));
+      error.importPhase = phase;
+      error.importResult = result;
+      throw error;
+    }
+  }
+  function describeImportResult(r) {
+    const parts = [];
+    if (r.tables) parts.push(`${r.tables} ${importPlural(r.tables, "table cr\u00E9\u00E9e", "tables cr\u00E9\u00E9es")}`);
+    if (r.added) parts.push(`${r.added} ${importPlural(r.added, "colonne ajout\u00E9e", "colonnes ajout\u00E9es")}`);
+    if (r.modified) parts.push(`${r.modified} ${importPlural(r.modified, "colonne modifi\u00E9e", "colonnes modifi\u00E9es")}`);
+    return parts.join(", ");
+  }
+
+  // src/render/importDialog.js
+  function importEl(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== void 0) node.textContent = text;
+    return node;
+  }
+  function describeImportColumn(col) {
+    const label = IMPORT_TYPE_LABELS[col.baseType] || col.baseType;
+    return col.refTable ? `${label} \u2192 ${col.refTable}` : label;
+  }
+  function showImportDialog(dom2, { fileName, plan, onApply }) {
+    const dialog = dom2.importDialog;
+    const selected = new Set(plan.changes.filter((c) => c.selected && !c.blocked).map((c) => c.id));
+    const checkboxes = [];
+    const previousFocus = document.activeElement;
+    let busy = false;
+    const counts = { addTable: 0, addColumn: 0, modifyColumn: 0 };
+    plan.changes.forEach((c) => {
+      counts[c.kind] += 1;
+    });
+    const parts = [];
+    if (counts.addTable) parts.push(`${counts.addTable} ${importPlural(counts.addTable, "table \u00E0 cr\u00E9er", "tables \u00E0 cr\u00E9er")}`);
+    if (counts.addColumn) parts.push(`${counts.addColumn} ${importPlural(counts.addColumn, "colonne \u00E0 ajouter", "colonnes \u00E0 ajouter")}`);
+    if (counts.modifyColumn) parts.push(`${counts.modifyColumn} ${importPlural(counts.modifyColumn, "colonne \u00E0 modifier", "colonnes \u00E0 modifier")}`);
+    const { identicalColumns, docOnlyColumns, docOnlyTables, formulaCount } = plan.stats;
+    let summary = `Fichier \u00AB ${fileName} \u00BB : ${parts.join(", ")}. Coche ce que tu veux appliquer.`;
+    if (identicalColumns) summary += ` ${identicalColumns} ${importPlural(identicalColumns, "colonne est d\u00E9j\u00E0 identique", "colonnes sont d\u00E9j\u00E0 identiques")}.`;
+    if (docOnlyTables || docOnlyColumns) {
+      summary += ` Rien n'est jamais supprim\u00E9 : ${docOnlyTables} ${importPlural(docOnlyTables, "table", "tables")} et ${docOnlyColumns} ${importPlural(docOnlyColumns, "colonne", "colonnes")} du document absentes du fichier sont conserv\u00E9es.`;
+    }
+    dom2.importSummary.textContent = summary;
+    dom2.importNotice.hidden = formulaCount === 0;
+    dom2.importNotice.textContent = formulaCount ? `${formulaCount} ${importPlural(formulaCount, "formule est incluse", "formules sont incluses")} dans cet import : Grist les ex\u00E9cutera dans ce document. Relis-les avant d'appliquer.` : "";
+    dom2.importList.replaceChildren();
+    function refreshApply() {
+      dom2.importApplyBtn.textContent = busy ? "Application en cours\u2026" : `Appliquer (${selected.size})`;
+      dom2.importApplyBtn.disabled = busy || selected.size === 0;
+    }
+    function addCheckRow(parent, change, badgeText, badgeClass, titleText, metaText) {
+      const row = importEl("div", "import-row");
+      const label = importEl("label", "import-check");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = selected.has(change.id);
+      input.disabled = !!change.blocked;
+      input.addEventListener("change", () => {
+        if (input.checked) selected.add(change.id);
+        else selected.delete(change.id);
+        refreshApply();
+      });
+      label.append(input, importEl("span", `import-badge ${badgeClass}`, badgeText), importEl("span", "import-name mono", titleText));
+      if (metaText) label.append(importEl("span", "import-meta", metaText));
+      row.append(label);
+      if (change.blocked) row.append(importEl("p", "import-warn", `Impossible : ${change.blocked}.`));
+      parent.append(row);
+      checkboxes.push({ input, change });
+      return row;
+    }
+    plan.changes.filter((c) => c.kind === "addTable").forEach((c) => {
+      const n = c.table.columns.length;
+      const row = addCheckRow(dom2.importList, c, "Nouvelle table", "is-add", c.tableId, `${n} ${importPlural(n, "colonne", "colonnes")}`);
+      if (c.missingTargets.length) {
+        row.append(importEl("p", "import-warn", `\u26A0 Colonnes ignor\u00E9es faute de table cible : ${c.missingTargets.join(", ")}.`));
+      }
+      if (n) {
+        const details = importEl("details", "import-details");
+        details.append(importEl("summary", null, "Voir les colonnes"));
+        const ul = importEl("ul");
+        c.table.columns.forEach((col) => {
+          const formula = col.formula ? ` \u2014 formule : ${importTruncate(col.formula, 120)}` : "";
+          ul.append(importEl("li", null, `${col.id} \u2014 ${describeImportColumn(col)}${formula}`));
+        });
+        details.append(ul);
+        row.append(details);
+      }
+    });
+    const byTable = /* @__PURE__ */ new Map();
+    plan.changes.filter((c) => c.kind !== "addTable").forEach((c) => {
+      if (!byTable.has(c.tableId)) byTable.set(c.tableId, []);
+      byTable.get(c.tableId).push(c);
+    });
+    byTable.forEach((items, tableId) => {
+      const section = importEl("section", "import-table");
+      section.append(importEl("h3", "import-table-name mono", tableId));
+      items.forEach((c) => {
+        if (c.kind === "addColumn") {
+          const row = addCheckRow(section, c, "Nouvelle colonne", "is-add", c.column.id, describeImportColumn(c.column));
+          if (c.column.formula) row.append(importEl("p", "import-detail", `Formule : ${importTruncate(c.column.formula, 120)}`));
+        } else {
+          const row = addCheckRow(section, c, "Modifi\u00E9e", "is-modify", c.column.id, "");
+          const ul = importEl("ul", "import-diffs");
+          c.diffs.forEach((d) => ul.append(importEl("li", null, d.text)));
+          row.append(ul);
+          if (c.risky) row.append(importEl("p", "import-warn", "\u26A0 Attention : cette modification peut alt\u00E9rer des donn\u00E9es existantes. D\u00E9coch\u00E9e par d\u00E9faut."));
+        }
+      });
+      dom2.importList.append(section);
+    });
+    function setAll(value) {
+      checkboxes.forEach(({ input, change }) => {
+        if (input.disabled) return;
+        input.checked = value;
+        if (value) selected.add(change.id);
+        else selected.delete(change.id);
+      });
+      refreshApply();
+    }
+    function setBusy(value) {
+      busy = value;
+      checkboxes.forEach(({ input, change }) => {
+        input.disabled = value || !!change.blocked;
+      });
+      dom2.importCancelBtn.disabled = value;
+      dom2.importSelectAll.disabled = value;
+      dom2.importSelectNone.disabled = value;
+      refreshApply();
+    }
+    function close() {
+      dialog.classList.remove("is-visible");
+      document.removeEventListener("keydown", handleKey);
+      dom2.importApplyBtn.removeEventListener("click", handleApply);
+      dom2.importCancelBtn.removeEventListener("click", handleCancel);
+      dom2.importSelectAll.removeEventListener("click", handleSelectAll);
+      dom2.importSelectNone.removeEventListener("click", handleSelectNone);
+      dialog.removeEventListener("click", handleOverlayClick);
+      if (previousFocus && typeof previousFocus.focus === "function") previousFocus.focus();
+    }
+    function handleCancel() {
+      if (!busy) close();
+    }
+    function handleKey(e) {
+      if (e.key === "Escape") handleCancel();
+    }
+    function handleOverlayClick(e) {
+      if (e.target === dialog) handleCancel();
+    }
+    function handleSelectAll() {
+      setAll(true);
+    }
+    function handleSelectNone() {
+      setAll(false);
+    }
+    async function handleApply() {
+      if (busy || selected.size === 0) return;
+      setBusy(true);
+      try {
+        await onApply(plan.changes.filter((c) => selected.has(c.id)));
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setBusy(false);
+        close();
+      }
+    }
+    refreshApply();
+    dom2.importCancelBtn.disabled = false;
+    dom2.importSelectAll.disabled = false;
+    dom2.importSelectNone.disabled = false;
+    dom2.importApplyBtn.addEventListener("click", handleApply);
+    dom2.importCancelBtn.addEventListener("click", handleCancel);
+    dom2.importSelectAll.addEventListener("click", handleSelectAll);
+    dom2.importSelectNone.addEventListener("click", handleSelectNone);
+    dialog.addEventListener("click", handleOverlayClick);
+    document.addEventListener("keydown", handleKey);
+    dialog.classList.add("is-visible");
+    dom2.importList.scrollTop = 0;
+    dom2.importTitle.focus();
+  }
+
+  // src/render/transferMenu.js
+  function bindTransferMenu(dom2) {
+    const btn = dom2.transferMenuBtn;
+    const menu = dom2.transferMenu;
+    if (!btn || !menu) return;
+    const enabledItems = () => [...menu.querySelectorAll('[role="menuitem"]')].filter((i) => !i.disabled);
+    const isOpen = () => !menu.hidden;
+    function open(focusFirst) {
+      menu.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+      if (focusFirst) {
+        const first = enabledItems()[0];
+        if (first) first.focus();
+      }
+    }
+    function close(returnFocus) {
+      menu.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+      if (returnFocus) btn.focus();
+    }
+    btn.addEventListener("click", () => {
+      if (isOpen()) close(false);
+      else open(false);
+    });
+    btn.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        open(true);
+      }
+    });
+    menu.addEventListener("keydown", (e) => {
+      const list = enabledItems();
+      const index = list.indexOf(document.activeElement);
+      if (e.key === "ArrowDown" && list.length) {
+        e.preventDefault();
+        list[(index + 1) % list.length].focus();
+      } else if (e.key === "ArrowUp" && list.length) {
+        e.preventDefault();
+        list[(index - 1 + list.length) % list.length].focus();
+      } else if (e.key === "Home" && list.length) {
+        e.preventDefault();
+        list[0].focus();
+      } else if (e.key === "End" && list.length) {
+        e.preventDefault();
+        list[list.length - 1].focus();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        close(true);
+      } else if (e.key === "Tab") {
+        close(false);
+      }
+    });
+    menu.addEventListener("click", () => close(true));
+    document.addEventListener("mousedown", (e) => {
+      if (isOpen() && !btn.contains(e.target) && !menu.contains(e.target)) close(false);
+    });
+  }
+
+=======
+>>>>>>> main/main
   // src/data/displayModel.js
   function toDisplayField(f) {
     const field = { name: f.name, type: f.type, isStaged: true };
@@ -1979,6 +2654,115 @@ ${summary}`,
       applyFocusStyles(dom2.canvasContent, displayConnections, state.focused);
       fitToView();
     });
+<<<<<<< HEAD
+    bindTransferMenu(dom2);
+    if (!isLiveGrist && dom2.transferMenuBtn) {
+      dom2.transferMenuBtn.disabled = true;
+      dom2.transferMenuBtn.title = "L'import et l'export ne sont disponibles que dans un document Grist.";
+    }
+    if (dom2.exportJson) {
+      if (!isLiveGrist) {
+        dom2.exportJson.disabled = true;
+        dom2.exportJson.title = "L'export n'est disponible que dans un document Grist.";
+      } else {
+        dom2.exportJson.addEventListener("click", async () => {
+          dom2.exportJson.disabled = true;
+          try {
+            const { tableRows, columnRows } = await fetchRawGristMetadata();
+            let docName = "";
+            try {
+              docName = await window.grist.docApi.getDocName();
+            } catch (e) {
+              docName = "";
+            }
+            const schema = buildSchemaExport(tableRows, columnRows, docName);
+            downloadJsonFile(schema, `modele-${slugifyFileName(docName)}.json`);
+            showToast(`Mod\xE8le export\xE9 : ${schema.tables.length} tables.`);
+          } catch (err) {
+            console.error(err);
+            showToast("L'export a \xE9chou\xE9. R\xE9essaie, ou recharge la page.");
+          } finally {
+            dom2.exportJson.disabled = false;
+          }
+        });
+      }
+    }
+    async function applyImportSelection(selected) {
+      try {
+        const result = await runImportChanges(selected);
+        await refreshFromGrist();
+        let message = `Import appliqu\u00E9 : ${describeImportResult(result) || "aucun changement"}.`;
+        if (result.warnings.length) {
+          message += ` ${result.warnings.length} ${importPlural(result.warnings.length, "\u00E9l\u00E9ment ignor\u00E9", "\u00E9l\u00E9ments ignor\u00E9s")} : ${result.warnings[0]}`;
+        }
+        if (result.extraStepsFailed) {
+          message += " Certains r\u00E9glages annexes (colonne \u00E0 afficher, visibilit\u00E9 dans Donn\u00E9es brutes) n'ont pas pu \u00EAtre appliqu\u00E9s : v\u00E9rifie dans Grist.";
+        }
+        showToast(message);
+      } catch (err) {
+        console.error(err);
+        const reason = err && err.message ? err.message : String(err);
+        const phaseLabel = IMPORT_PHASE_LABELS[err && err.importPhase] || "l'import";
+        const done = err && err.importResult ? describeImportResult(err.importResult) : "";
+        showToast(`L'import s'est arr\u00EAt\u00E9 \u00E0 l'\u00E9tape ${phaseLabel} : ${reason}. ${done ? `D\u00E9j\u00E0 appliqu\u00E9 : ${done}.` : "Rien n'a \u00E9t\u00E9 \u00E9crit."}`);
+        try {
+          await refreshFromGrist();
+        } catch (refreshErr) {
+        }
+      }
+    }
+    async function startImportFromFile(file) {
+      if (file.size > IMPORT_MAX_BYTES) {
+        showToast("Ce fichier est trop volumineux pour un export de mod\u00E8le (5 Mo maximum).");
+        return;
+      }
+      const parsed = parseSchemaImport(await file.text());
+      if (!parsed.ok) {
+        const shown = parsed.problems.slice(0, 6);
+        const more = parsed.problems.length - shown.length;
+        showConfirmDialog(dom2, {
+          message: `Ce fichier ne peut pas \u00EAtre import\u00E9 :\n\n${shown.map((p) => `\u2022 ${p}`).join("\n")}${more > 0 ? `\n\u2022 \u2026 et ${more} autre${more > 1 ? "s" : ""}` : ""}`,
+          confirmLabel: "Compris",
+          onConfirm: () => {
+          }
+        });
+        return;
+      }
+      const { tableRows, columnRows } = await fetchRawGristMetadata();
+      const plan = buildImportPlan(parsed.schema, tableRows, columnRows);
+      if (!plan.changes.length) {
+        showToast("Aucune diff\u00E9rence : le document contient d\u00E9j\u00E0 tout le mod\u00E8le du fichier.");
+        return;
+      }
+      showImportDialog(dom2, { fileName: file.name, plan, onApply: applyImportSelection });
+    }
+    if (dom2.importJson && dom2.importFile) {
+      if (!isLiveGrist) {
+        dom2.importJson.disabled = true;
+        dom2.importJson.title = "L'import n'est disponible que dans un document Grist.";
+      } else {
+        dom2.importJson.addEventListener("click", () => {
+          if (!isStagingEmpty(state.staging)) {
+            showToast("Valide ou annule d'abord le brouillon du mode \u00E9dition, puis relance l'import.");
+            return;
+          }
+          dom2.importFile.value = "";
+          dom2.importFile.click();
+        });
+        dom2.importFile.addEventListener("change", async () => {
+          const file = dom2.importFile.files && dom2.importFile.files[0];
+          if (!file) return;
+          try {
+            await startImportFromFile(file);
+          } catch (err) {
+            console.error(err);
+            showToast("Impossible de lire ce fichier. V\u00E9rifie qu'il s'agit bien d'un export du mod\u00E8le de donn\u00E9es.");
+          }
+        });
+      }
+    }
+=======
+>>>>>>> main/main
     dom2.canvasContent.addEventListener("mousedown", (e) => {
       if (e.target === dom2.canvasContent || e.target === dom2.wires) setFocus(null);
     });
@@ -2072,6 +2856,23 @@ ${summary}`,
     modeFocusBtn: byId("mode-focus"),
     modeAllBtn: byId("mode-all"),
     resetLayout: byId("reset-layout"),
+<<<<<<< HEAD
+    transferMenuBtn: byId("transfer-menu-btn"),
+    transferMenu: byId("transfer-menu"),
+    exportJson: byId("export-json"),
+    importJson: byId("import-json"),
+    importFile: byId("import-file"),
+    importDialog: byId("import-dialog"),
+    importTitle: byId("import-title"),
+    importSummary: byId("import-summary"),
+    importNotice: byId("import-notice"),
+    importList: byId("import-list"),
+    importSelectAll: byId("import-select-all"),
+    importSelectNone: byId("import-select-none"),
+    importCancelBtn: byId("import-cancel"),
+    importApplyBtn: byId("import-apply"),
+=======
+>>>>>>> main/main
     sidebar: byId("sidebar"),
     canvasWrap: byId("canvas-wrap"),
     canvasContent: byId("canvas-content"),
